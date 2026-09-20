@@ -55,6 +55,7 @@ function CostCell({ eq }: { eq: TransferEquivalencyWithCost }) {
 export default function TransferSearch({ plan, catalog, onAddTransferCourse }: Props) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<TransferSortKey>("cost-asc");
+  const [minOnline, setMinOnline] = useState(0);
   const [results, setResults] = useState<TransferEquivalencyWithCost[]>([]);
   const [loading, setLoading] = useState(false);
   const [totalCount, setTotalCount] = useState<number | null>(null);
@@ -136,6 +137,17 @@ export default function TransferSearch({ plan, catalog, onAddTransferCourse }: P
             <SelectItem value="school">School name (A–Z)</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={String(minOnline)} onValueChange={(v) => setMinOnline(Number(v))}>
+          <SelectTrigger className="h-10 w-[150px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="0">Any % online</SelectItem>
+            <SelectItem value="25">25%+ online</SelectItem>
+            <SelectItem value="50">50%+ online</SelectItem>
+            <SelectItem value="75">75%+ online</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {loading && <p className="mb-4 text-sm text-muted-foreground">Searching…</p>}
@@ -146,7 +158,9 @@ export default function TransferSearch({ plan, catalog, onAddTransferCourse }: P
       )}
 
       <div className="flex w-full flex-col gap-2">
-        {results.map((eq, i) => (
+        {results
+          .filter((eq) => minOnline === 0 || ((eq.cost as any)?.onlineSharePct ?? -1) >= minOnline)
+          .map((eq, i) => (
           <div
             key={`${eq.externalSchool}-${eq.externalCourse.code}-${i}`}
             className="grid grid-cols-1 items-center gap-3 rounded-lg border bg-card p-3.5 shadow-sm transition-shadow hover:shadow-soft sm:grid-cols-[1fr_auto_1fr_auto_auto] sm:gap-4"
