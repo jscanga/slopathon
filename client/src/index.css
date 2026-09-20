@@ -1,0 +1,278 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =====================================================================
+   transfr — light, airy pastel theme.
+   A calm neutral "paper" shell so data stays readable, with the four-
+   season art reserved for the Fall / Spring / Summer term cards.
+   Fonts kept from the original (Source Serif 4 / IBM Plex Sans / Mono).
+   ===================================================================== */
+
+@layer base {
+  :root {
+    /* ---- shadcn/ui tokens (HSL channels) ---- */
+    --background: 41 44% 88%;      /* aged-paper beige */
+    --foreground: 28 20% 22%;      /* warm sepia-ink */
+
+    --card: 43 52% 97%;            /* warm cream card */
+    --card-foreground: 28 20% 22%;
+
+    --popover: 43 52% 97%;
+    --popover-foreground: 28 20% 22%;
+
+    --primary: 174 46% 40%;        /* refined teal */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 40 36% 91%;
+    --secondary-foreground: 28 20% 26%;
+
+    --muted: 40 34% 90%;
+    --muted-foreground: 32 12% 42%;
+
+    --accent: 168 44% 93%;         /* pale teal wash */
+    --accent-foreground: 176 40% 24%;
+
+    --destructive: 8 62% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 38 26% 80%;
+    --input: 38 26% 80%;
+    --ring: 174 46% 40%;
+
+    --radius: 0.85rem;
+
+    /* ---- requirement / tag inks (soft, pastel-forward) ---- */
+    --ink-core: 214 78% 62%;
+    --ink-math: 152 46% 46%;
+    --ink-elective: 38 78% 55%;
+    --ink-capstone: 8 72% 62%;
+    --ink-genEd: 268 52% 66%;
+
+    /* ---- fonts ---- */
+    --font-display: "Source Serif 4", serif;
+    --font-body: "IBM Plex Sans", sans-serif;
+    --font-code: "IBM Plex Mono", monospace;
+
+    /* =================================================================
+       Seasonal palettes — used only by the term cards' art scenes.
+       Each has: a 3-stop gradient (1 light -> 3 deep), an ink color for
+       the season label, and art accents.
+       ================================================================= */
+
+    /* Fall — brown / amber, falling leaves */
+    --fall-1: #fbeeda;
+    --fall-2: #f0d3a4;
+    --fall-3: #e0ad6b;
+    --fall-ink: #955b28;
+    --fall-chip: 34 60% 96%;
+    --fall-leaf-a: #e08a38;
+    --fall-leaf-b: #c6552a;
+    --fall-leaf-c: #e7b64c;
+    --fall-leaf-d: #a9682f;
+
+    /* Spring — green, flowers + grass */
+    --spring-1: #edf8e4;
+    --spring-2: #cdecb6;
+    --spring-3: #a9dc8a;
+    --spring-ink: #3f7f38;
+    --spring-chip: 96 44% 97%;
+    --spring-grass: #6db24f;
+    --spring-flower-a: #f2a4c3;
+    --spring-flower-b: #fbdf7e;
+    --spring-flower-c: #ffffff;
+    --spring-flower-core: #f6c445;
+
+    /* Summer — sunny, sand + beige */
+    --summer-1: #fff6d3;
+    --summer-2: #fbe4ad;
+    --summer-3: #ecce93;
+    --summer-ink: #b3792a;
+    --summer-chip: 44 68% 97%;
+    --summer-sun: #ffcb4d;
+    --summer-sun-core: #ffe08a;
+    --summer-sand: #e6cf9c;
+    --summer-sea: #7fd0d4;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.5;
+    /* Aged-paper: fine fiber grain + warm mottling + a faint seasonal wash + vignette. */
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"),
+      radial-gradient(680px 520px at 18% 12%, rgba(255, 250, 235, 0.55), transparent 60%),
+      radial-gradient(760px 560px at 88% 8%, rgba(180, 150, 96, 0.10), transparent 55%),
+      radial-gradient(900px 700px at 70% 100%, rgba(150, 120, 70, 0.10), transparent 60%),
+      radial-gradient(1200px 900px at 50% 40%, transparent 58%, rgba(96, 78, 44, 0.10) 100%);
+    background-attachment: fixed;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .font-code,
+  code {
+    font-family: var(--font-code);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 6px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.5);
+    background-clip: content-box;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+}
+
+@layer components {
+  .season-scene {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+  }
+  .season-fall {
+    background: linear-gradient(160deg, var(--fall-1) 0%, var(--fall-2) 58%, var(--fall-3) 100%);
+  }
+  .season-spring {
+    background: linear-gradient(160deg, var(--spring-1) 0%, var(--spring-2) 58%, var(--spring-3) 100%);
+  }
+  .season-summer {
+    background: linear-gradient(165deg, var(--summer-1) 0%, var(--summer-2) 55%, var(--summer-3) 100%);
+  }
+
+  .season-ink-fall { color: var(--fall-ink); }
+  .season-ink-spring { color: var(--spring-ink); }
+  .season-ink-summer { color: var(--summer-ink); }
+
+  .season-body-fall { background: hsl(var(--fall-chip)); }
+  .season-body-spring { background: hsl(var(--spring-chip)); }
+  .season-body-summer { background: hsl(var(--summer-chip)); }
+}
+
+/* =====================================================================
+   Motion — entrances, count-up emphasis, ambient art movement.
+   All of it collapses to a single static frame under
+   prefers-reduced-motion (handled globally in @layer base).
+   ===================================================================== */
+@layer utilities {
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(14px) scale(0.985); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .animate-rise {
+    opacity: 0;
+    animation: rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  @keyframes pop-in {
+    0% { opacity: 0; transform: scale(0.8); }
+    60% { opacity: 1; transform: scale(1.06); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+  .animate-pop-in { animation: pop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+  /* Slow, warm breathing glow around the estimated-cost hero. */
+  @keyframes cost-breathe {
+    0%, 100% { box-shadow: 0 6px 22px -10px rgba(20, 140, 125, 0.35), 0 0 0 1px rgba(45, 190, 170, 0.14) inset; }
+    50% { box-shadow: 0 14px 40px -10px rgba(20, 140, 125, 0.55), 0 0 0 1px rgba(45, 190, 170, 0.28) inset; }
+  }
+  .animate-cost-breathe { animation: cost-breathe 4.5s ease-in-out infinite; }
+
+  /* A soft light sweep across the cost figure. */
+  @keyframes sheen {
+    0% { background-position: -160% 0; }
+    60%, 100% { background-position: 260% 0; }
+  }
+  .cost-sheen {
+    background-image: linear-gradient(
+      100deg,
+      transparent 20%,
+      rgba(255, 255, 255, 0.7) 45%,
+      rgba(255, 255, 255, 0.9) 50%,
+      rgba(255, 255, 255, 0.7) 55%,
+      transparent 80%
+    );
+    background-size: 200% 100%;
+    background-repeat: no-repeat;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: sheen 6s ease-in-out infinite;
+  }
+
+  /* Brief pop applied to the cost when its value changes. */
+  @keyframes value-bump {
+    0% { transform: scale(1); }
+    30% { transform: scale(1.08); }
+    100% { transform: scale(1); }
+  }
+  .animate-value-bump { animation: value-bump 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+  @keyframes float-y {
+    0%, 100% { transform: translateY(0) translateX(0) rotate(0deg); }
+    50% { transform: translateY(-6px) translateX(4px) rotate(6deg); }
+  }
+
+  @keyframes flutter {
+    0%, 100% { transform: translate(0, 0) rotate(-4deg); }
+    25% { transform: translate(10px, -8px) rotate(6deg); }
+    50% { transform: translate(22px, -3px) rotate(-3deg); }
+    75% { transform: translate(12px, 5px) rotate(5deg); }
+  }
+
+  @keyframes wing {
+    0%, 100% { transform: scaleX(1); }
+    50% { transform: scaleX(0.35); }
+  }
+
+  @keyframes twinkle {
+    0%, 100% { opacity: 0.9; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.82); }
+  }
+
+  /* Diagonal light sweep across the cost hero. */
+  @keyframes sweep {
+    0% { transform: translateX(-140%) skewX(-18deg); }
+    100% { transform: translateX(360%) skewX(-18deg); }
+  }
+  .cost-sweep { animation: sweep 5.5s ease-in-out infinite; }
+}

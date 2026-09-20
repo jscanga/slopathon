@@ -1,0 +1,80 @@
+{
+  "id": "cs-bs-2023",
+  "name": "Computer Science, BS",
+  "effectiveTerm": "Fall 2023",
+  "totalCredits": 54,
+  "totalDegreeCredits": 120,
+  "eligibility": [
+    { "kind": "course", "course": { "code": "CMPINF 0401", "title": "INTERMEDIATE PROGRAMMING", "credits": 3, "minGrade": "C" } },
+    { "kind": "course", "course": { "code": "CS 0441", "title": "DISCRETE STRUCTURES FOR CS", "credits": 3, "minGrade": "C" } },
+    { "kind": "course", "course": { "code": "CS 0445", "title": "ALGORITHMS AND DATA STRUCTURES 1", "credits": 3, "minGrade": "C" } },
+    { "kind": "course", "course": { "code": "CS 0447", "title": "COMPUTER ORGANIZATION AND ASSEMBLY LANGUAGE", "credits": 3, "minGrade": "C" } }
+  ],
+  "requirements": [
+    {
+      "kind": "group",
+      "label": "Core Courses",
+      "children": [
+        { "kind": "sequence", "label": "Programming, Data Structures, Algorithms",
+          "courses": [
+            { "code": "CMPINF 0401", "title": "INTERMEDIATE PROGRAMMING", "credits": 3 },
+            { "code": "CS 0445", "title": "ALGORITHMS AND DATA STRUCTURES 1", "credits": 3 },
+            { "code": "CS 1501", "title": "ALGORITHMS AND DATA STRUCTURES 2", "credits": 3 }
+          ]
+        },
+        { "kind": "sequence", "label": "Systems",
+          "courses": [
+            { "code": "CS 0447", "title": "COMPUTER ORGANIZATION AND ASSEMBLY LANGUAGE", "credits": 3 },
+            { "code": "CS 0449", "title": "INTRODUCTION TO SYSTEMS SOFTWARE", "credits": 3 }
+          ]
+        },
+        { "kind": "sequence", "label": "Discrete Math and Theory",
+          "courses": [
+            { "code": "CS 0441", "title": "DISCRETE STRUCTURES FOR CS", "credits": 3 },
+            { "code": "CS 1502", "title": "FORMAL METHODS IN COMPUTER SCIENCE", "credits": 3 }
+          ]
+        },
+        { "kind": "course", "course": { "code": "CS 1503", "title": "MATHEMATICAL FOUNDATIONS OF MACHINE LEARNING", "credits": 3 } }
+      ]
+    },
+    {
+      "kind": "countOf",
+      "label": "Upper-Level Electives",
+      "n": 6,
+      "unit": "courses",
+      "pool": {
+        "department": "CS",
+        "numberMin": 1504,
+        "excludeTags": ["internship", "directed-study", "capstone", "co-op"]
+      }
+    },
+    {
+      "kind": "group",
+      "label": "Required Mathematics",
+      "credits": 7,
+      "children": [
+        { "kind": "course", "course": { "code": "MATH 0220", "title": "ANALYTIC GEOMETRY AND CALCULUS 1", "credits": 4 } },
+        { "kind": "chooseOne", "label": "Linear Algebra",
+          "options": [
+            { "kind": "course", "course": { "code": "MATH 0280", "title": "INTRO TO MATRICES & LINEAR ALG", "credits": 3 } },
+            { "kind": "course", "course": { "code": "MATH 1180", "title": "LINEAR ALGEBRA 1", "credits": 3 } }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "capstone",
+      "label": "Capstone Experience",
+      "options": [
+        { "label": "Internship", "course": { "code": "CS 1900", "title": "INTERNSHIP", "credits": 3 }, "minCredits": 3 },
+        { "label": "Directed Research", "course": { "code": "CS 1950", "title": "DIRECTED RESEARCH: CAPSTONE", "credits": 3 }, "minCredits": 3 },
+        { "label": "Capstone Course", "course": { "code": "CS 1980", "title": "TEAM PROJECT DESIGN AND IMPLEMENTATION", "credits": 3 } },
+        { "label": "Co-op", "course": { "code": "CS 1906", "title": "COMPUTER SCIENCE COOPERATIVE PROGRAM", "credits": 0 }, "minRotations": 2 }
+      ]
+    }
+  ],
+  "notes": [
+    "A capstone course may NOT also count as a CS Upper-Level Elective.",
+    "Students may complete more than one capstone experience."
+  ]
+}

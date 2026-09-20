@@ -1,0 +1,79 @@
+{
+  "id": "default",
+  "majorId": "cs-bs-2023",
+  "updatedAt": "2026-09-20T00:08:37.796Z",
+  "semesters": [
+    {
+      "id": "sem-0",
+      "term": "Fall",
+      "year": 2026,
+      "courses": []
+    },
+    {
+      "id": "sem-1",
+      "term": "Spring",
+      "year": 2027,
+      "courses": []
+    },
+    {
+      "id": "sem-2",
+      "term": "Summer",
+      "year": 2027,
+      "courses": []
+    },
+    {
+      "id": "sem-3",
+      "term": "Fall",
+      "year": 2027,
+      "courses": []
+    },
+    {
+      "id": "sem-4",
+      "term": "Spring",
+      "year": 2028,
+      "courses": []
+    },
+    {
+      "id": "sem-5",
+      "term": "Summer",
+      "year": 2028,
+      "courses": []
+    },
+    {
+      "id": "sem-6",
+      "term": "Fall",
+      "year": 2028,
+      "courses": []
+    },
+    {
+      "id": "sem-7",
+      "term": "Spring",
+      "year": 2029,
+      "courses": []
+    },
+    {
+      "id": "sem-8",
+      "term": "Summer",
+      "year": 2029,
+      "courses": []
+    },
+    {
+      "id": "sem-9",
+      "term": "Fall",
+      "year": 2029,
+      "courses": []
+    },
+    {
+      "id": "sem-10",
+      "term": "Spring",
+      "year": 2030,
+      "courses": []
+    },
+    {
+      "id": "sem-11",
+      "term": "Summer",
+      "year": 2030,
+      "courses": []
+    }
+  ]
+}
