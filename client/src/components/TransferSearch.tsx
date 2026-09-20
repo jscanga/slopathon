@@ -28,21 +28,24 @@ interface Props {
 }
 
 function CostCell({ eq }: { eq: TransferEquivalencyWithCost }) {
-  const cost = eq.cost?.costPerCreditInState ?? null;
+  const c = eq.cost as any;
+  const cost = c?.effectivePerCredit ?? null;
   if (cost == null) {
     return (
-      <div className="text-right font-code">
+      <div className="min-w-[104px] text-right font-code">
         <span className="text-lg text-muted-foreground/50">—</span>
       </div>
     );
   }
   return (
-    <div className="min-w-[92px] text-right font-code">
+    <div className="min-w-[104px] text-right font-code">
       <div className="text-base font-semibold text-primary">${cost}</div>
-      <div className="text-[0.65rem] text-muted-foreground">/ credit (est.)</div>
-      {eq.cost?.onlineSharePct != null && (
+      <div className="text-[0.65rem] text-muted-foreground">
+        / credit · {c.residency === "in-state" ? "in-state" : "out-of-state"}
+      </div>
+      {c?.onlineSharePct != null && (
         <div className="mt-0.5 text-[0.7rem] text-muted-foreground">
-          {eq.cost.onlineSharePct}% online
+          {c.onlineSharePct}% online
         </div>
       )}
     </div>
@@ -82,9 +85,10 @@ export default function TransferSearch({ plan, catalog, onAddTransferCourse }: P
       <div className="mb-5 max-w-[680px]">
         <h2 className="mb-1 font-display text-[1.4rem] font-semibold">Transfer course search</h2>
         <p className="text-sm text-muted-foreground">
-          Find a course from another school, see its Pitt equivalent and estimated
-          cost per credit, then drop it into your timeline. Sorted cheapest-first by
-          default.
+          Search the <strong>Pitt course</strong> you need, and see which schools you can
+          take an equivalent at and what it costs to transfer in. Prices are per credit
+          for a <strong>Pennsylvania resident</strong> (in-state at PA schools,
+          out-of-state elsewhere). Sorted cheapest-first by default.
         </p>
       </div>
 
@@ -116,7 +120,7 @@ export default function TransferSearch({ plan, catalog, onAddTransferCourse }: P
           <input
             type="text"
             className="h-10 w-full rounded-md border border-input bg-card pl-9 pr-3 text-sm shadow-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
-            placeholder="Search by school, external course, or Pitt course…"
+            placeholder="Search a Pitt course — code or name (e.g. CS 0445, Calculus)…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />

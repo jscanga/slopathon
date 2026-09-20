@@ -8,6 +8,7 @@ import type {
   GroupChild,
   SchoolCostMap,
 } from "./serverTypes";
+import { effectiveRate } from "../lib/residency";
 
 // Pitt cost constants (from the user's figures):
 // - Full-time (>= 12 credits in a term): flat per-semester charge.
@@ -322,8 +323,10 @@ function computeCost(
     for (const c of sem.courses) {
       const credits = catalog[c.code]?.credits ?? 0;
       if (c.source === "transfer") {
+        // Residency-aware: a PA resident pays in-state only at PA schools,
+        // out-of-state elsewhere.
         const rate = c.transferFrom
-          ? schoolCosts[c.transferFrom.school]?.costPerCreditInState ?? null
+          ? effectiveRate(schoolCosts[c.transferFrom.school]).effectivePerCredit
           : null;
         if (rate == null) {
           hasUnknownTransferCost = true;

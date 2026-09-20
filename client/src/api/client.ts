@@ -8,6 +8,7 @@ import type {
   TransferSortKey,
 } from "../types";
 import { evaluatePlan as runEvaluate } from "../engine/evaluatePlan";
+import { effectiveRate } from "../lib/residency";
 
 /**
  * Static, server-less data layer.
@@ -95,13 +96,16 @@ function loadPlan(): StudentPlan {
 
 /* ---- transfer helpers (mirror the old server) ---- */
 
-const withCost = (cost: Record<string, any>) => (eq: any) => ({
-  ...eq,
-  cost: cost[eq.externalSchool] ?? null,
-});
+// Attach the school's cost record, enriched with the residency-aware effective
+// per-credit rate (PA resident: in-state at PA schools, out-of-state elsewhere).
+const withCost = (costMap: Record<string, any>) => (eq: any) => {
+  const raw = costMap[eq.externalSchool] ?? null;
+  const cost = raw ? { ...raw, ...effectiveRate(raw) } : null;
+  return { ...eq, cost };
+};
 
 function sortEquivalencies(rows: any[], key: TransferSortKey): any[] {
-  const costOf = (r: any) => r.cost?.costPerCreditInState ?? null;
+  const costOf = (r: any) => r.cost?.effectivePerCredit ?? null;
   const onlineOf = (r: any) => r.cost?.onlineSharePct ?? null;
   return [...rows].sort((a, b) => {
     if (key === "school") return a.externalSchool.localeCompare(b.externalSchool);
@@ -163,14 +167,13 @@ export const api = {
     const qq = q.trim().toUpperCase();
     let matched = rows;
     if (qq) {
-      matched = rows.filter(
-        (eq: any) =>
-          eq.externalSchool.toUpperCase().includes(qq) ||
-          eq.externalCourse.code.toUpperCase().includes(qq) ||
-          eq.externalCourse.title.toUpperCase().includes(qq) ||
-          eq.pittCourse.code.toUpperCase().includes(qq) ||
-          (eq.pittCourse.title ?? "").toUpperCase().includes(qq)
-      );
+      // Search by the PITT course you need — code, title, or catalog name.
+      matched = rows.filter((eq: any) => {
+        const code = (eq.pittCourse?.code ?? "").toUpperCase();
+        const title = (eq.pittCourse?.title ?? "").toUpperCase();
+        const name = (core.catalog[eq.pittCourse?.code]?.name ?? "").toUpperCase();
+        return code.includes(qq) || title.includes(qq) || name.includes(qq);
+      });
     }
     return sortEquivalencies(matched.map(withCost(core.cost)), sort).slice(0, 100);
   },
