@@ -1,16 +1,13 @@
 # transfr
 
+Optimize your degree, reroute your future
+
+Most students plan their degree in a spreadsheet and find out what it costs when the bill arrives. transfr puts both in one screen: a four-year timeline that checks your major and gen-ed requirements as you build it, and a searchable database of every course Pitt accepts in transfer — 43,239 equivalencies from 1,801 schools — with each school's cost per credit attached. Plan the degree, see the price, reroute the expensive parts.
+
 A full-stack TypeScript/React app for planning a University of Pittsburgh
 degree timeline: a semester-by-semester grid where you add courses, and a
 live requirements checklist that tracks what's satisfied.
 
-The app itself isn't CS-specific — the UI reads the major's name and
-requirement structure from `major-requirements.json` rather than hardcoding
-it. Today that file describes the Computer Science, BS; swapping in a
-differently-shaped major requirements file (following the same schema in
-`server/src/types.ts`) is enough to reuse this for another major. Currently
-the server loads exactly one major file at startup — multi-major switching
-in a single running app (a dropdown to pick your major) isn't built yet.
 
 ## Structure
 
