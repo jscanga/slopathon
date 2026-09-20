@@ -1,7 +1,6 @@
+## James Scanga, Aayush Shah, James Widmer
+
 # transfr ![Slopathon](client/public/favicon.svg) 
-
-James Scanga, Aayush Shah, James Widmer
-
 
 Optimize your degree, reroute your future
 
