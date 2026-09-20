@@ -1,4 +1,4 @@
-# transfr (MVP)
+# transfr
 
 A full-stack TypeScript/React app for planning a University of Pittsburgh
 degree timeline: a semester-by-semester grid where you add courses, and a
