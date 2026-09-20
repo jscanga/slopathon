@@ -14,13 +14,14 @@ import AddCourseModal from "./components/AddCourseModal";
 import TransferSearch from "./components/TransferSearch";
 import DuplicateCourseModal from "./components/DuplicateCourseModal";
 import DebugPanel from "./components/DebugPanel";
+import ImportModal from "./components/ImportModal";
 import {
   buildGenEdTagIndex,
   buildMajorTagIndex,
   mergeTagIndexes,
 } from "./lib/genEdIndex";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { GraduationCap } from "lucide-react";
+import { GraduationCap, Upload } from "lucide-react";
 
 type Tab = "planner" | "transfer";
 
@@ -42,6 +43,7 @@ export default function App() {
   const [modalSemesterId, setModalSemesterId] = useState<string | null>(null);
   const [selectedMajorId, setSelectedMajorId] = useState<string>("cs-bs-2023");
   const [pendingAdd, setPendingAdd] = useState<PendingAdd | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -212,12 +214,21 @@ export default function App() {
             <span className="text-primary">transfr</span>
           </h1>
         </div>
-        <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
-          <TabsList>
-            <TabsTrigger value="planner">Timeline</TabsTrigger>
-            <TabsTrigger value="transfer">Transfer Search</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setImportOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+            title="Import a PeopleSoft What-If report PDF"
+          >
+            <Upload className="h-3.5 w-3.5" /> Import PDF
+          </button>
+          <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
+            <TabsList>
+              <TabsTrigger value="planner">Timeline</TabsTrigger>
+              <TabsTrigger value="transfer">Transfer Search</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
       </header>
 
       <aside className="hidden overflow-y-auto border-r border-border/70 bg-card/60 p-5 md:block">
@@ -279,6 +290,17 @@ export default function App() {
       )}
 
       <DebugPanel onLoadPlan={loadSamplePlan} onClearPlan={clearPlan} />
+
+      {importOpen && (
+        <ImportModal
+          onClose={() => setImportOpen(false)}
+          onImport={(imported) => {
+            setPlan(imported);
+            setTab("planner");
+            setImportOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }
