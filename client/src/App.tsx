@@ -15,6 +15,8 @@ import TransferSearch from "./components/TransferSearch";
 import DuplicateCourseModal from "./components/DuplicateCourseModal";
 import AutocompleteModal from "./components/AutocompleteModal";
 import type { AutocompleteResult } from "./engine/autocomplete";
+import DebugPanel from "./components/DebugPanel";
+import ImportModal from "./components/ImportModal";
 import {
   buildGenEdTagIndex,
   buildMajorTagIndex,
@@ -22,7 +24,7 @@ import {
 } from "./lib/genEdIndex";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { GraduationCap, Sparkles, Undo2, X } from "lucide-react";
+import { GraduationCap, Sparkles, Undo2, Upload, X } from "lucide-react";
 
 type Tab = "planner" | "transfer";
 
@@ -44,6 +46,7 @@ export default function App() {
   const [modalSemesterId, setModalSemesterId] = useState<string | null>(null);
   const [selectedMajorId, setSelectedMajorId] = useState<string>("cs-bs-2023");
   const [pendingAdd, setPendingAdd] = useState<PendingAdd | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [autocompleting, setAutocompleting] = useState(false);
   const [autoPreview, setAutoPreview] = useState<AutocompleteResult | null>(null);
@@ -203,6 +206,24 @@ export default function App() {
     });
   }
 
+  /** Debug/demo: replace the whole plan with a sample, or clear it. The
+   *  existing plan effect persists + re-evaluates automatically. */
+  function loadSamplePlan(sample: StudentPlan) {
+    setPlan(sample);
+    setTab("planner");
+  }
+
+  function clearPlan() {
+    setPlan((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        semesters: prev.semesters.map((s) => ({ ...s, courses: [] })),
+      };
+    });
+  }
+
+
   if (error) {
     return (
       <div className="mx-auto max-w-lg p-10">
@@ -230,12 +251,21 @@ export default function App() {
             <span className="text-primary">transfr</span>
           </h1>
         </div>
-        <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
-          <TabsList>
-            <TabsTrigger value="planner">Timeline</TabsTrigger>
-            <TabsTrigger value="transfer">Transfer Search</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setImportOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+            title="Import a PeopleSoft What-If report PDF"
+          >
+            <Upload className="h-3.5 w-3.5" /> Import PDF
+          </button>
+          <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
+            <TabsList>
+              <TabsTrigger value="planner">Timeline</TabsTrigger>
+              <TabsTrigger value="transfer">Transfer Search</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
       </header>
 
       <aside className="hidden overflow-y-auto border-r border-border/70 bg-card/60 p-5 md:block">
@@ -320,6 +350,23 @@ export default function App() {
               pendingAdd.transferFrom
             );
             setPendingAdd(null);
+          }}
+        />
+      )}
+
+      <DebugPanel
+        onLoadPlan={loadSamplePlan}
+        onClearPlan={clearPlan}
+        onAutocomplete={requestAutocomplete}
+      />
+
+      {importOpen && (
+        <ImportModal
+          onClose={() => setImportOpen(false)}
+          onImport={(imported) => {
+            setPlan(imported);
+            setTab("planner");
+            setImportOpen(false);
           }}
         />
       )}

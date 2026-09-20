@@ -308,7 +308,7 @@ export function evaluatePlan(
  *  semester charge; 1-11 → per-credit; 0 → nothing. Transfer courses are
  *  billed separately at their home school's per-credit rate (when known)
  *  and added on top. */
-function computeCost(
+export function computeCost(
   plan: StudentPlan,
   catalog: CourseCatalog,
   schoolCosts: SchoolCostMap

@@ -75,6 +75,16 @@ backend on port 4000 (see `client/vite.config.ts`).
   course chips get a matching colored left border, with a legend in the
   sidebar.
 
+- **PDF import**: "Import PDF" in the header parses a PeopleSoft What-If
+  report entirely in the browser (`client/src/lib/peoplesoftImport.ts`,
+  `pdfLoader.ts`) and builds a plan from it. Courses that aren't tied to a
+  real term (AP / already-transferred credit) land in a standalone **"Other"**
+  row, which `Semester.rowLabel` drives.
+- **Demo panel**: Ctrl/Cmd + D opens a panel with two canned scenarios (a
+  vanilla 4-year Pitt plan and a cheaper 3-year plan using real CCAC
+  equivalencies), plus clear-plan and autocomplete shortcuts. Demo only — it
+  overwrites the current plan.
+
 ## Known gaps (by design, for this MVP pass)
 
 - **No prerequisite checking yet.** The major requirements data has no
@@ -127,7 +137,11 @@ Because Summer is a real term in the 12-block layout, a Summer term with
 
 ## Autocomplete
 
-"Autocomplete my degree" (left sidebar) fills every unsatisfied requirement
+Reachable two ways — **"Autocomplete my degree"** in the left sidebar, and
+**"Autocomplete degree"** in the demo panel (Ctrl/Cmd + D). Both run the same
+solver; there is deliberately only one implementation.
+
+Autocomplete fills every unsatisfied requirement
 and lays the result across the 12 terms, choosing where to take each course
 so the total comes out as low as the cost model allows. It proposes first —
 nothing is committed until you confirm in the preview — and the change can
@@ -166,6 +180,15 @@ that file:
   Pitt treats the overlap.
 - **Target load is 15 credits/term**, up to 6 courses; free electives top the
   plan up to `totalDegreeCredits` (120) and may overshoot by a course.
+- **Labeled rows are never scheduled into.** A semester carrying a `rowLabel`
+  (the "Other" bucket that PDF import creates for AP/transfer credit) is a
+  record of credit already earned, not a term you can enroll in.
+
+Both headline figures in the preview — "every course at Pitt" and "this plan"
+— are produced by running `computeCost` over two real plans, the proposal and
+an all-native scheduling of the same course list. The optimizer's internal
+estimate is only used to *choose* what to transfer, so the preview and the
+sidebar can never quote different totals.
 
 ## Layout
 

@@ -12,7 +12,9 @@ import {
   PITT_FULLTIME_SEMESTER_COST,
   PITT_FULLTIME_THRESHOLD,
   PITT_PER_CREDIT_COST,
+  computeCost,
 } from "./evaluatePlan";
+import type { SchoolCostMap } from "./serverTypes";
 
 /**
  * Autocomplete: fill the rest of the degree, as cheaply as the cost model
@@ -433,6 +435,106 @@ function chooseTransfers(
 }
 
 /* ------------------------------------------------------------------ */
+/* scheduling                                                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Lays a set of picks across the plan's terms. Called twice — once with the
+ * chosen transfer set, once with none — so the "all at Pitt" baseline is a
+ * real plan costed by the real engine rather than a parallel estimate.
+ */
+function schedule(
+  plan: StudentPlan,
+  picks: Pick[],
+  transferred: Set<CourseCode>,
+  catalog: CourseCatalog,
+  baseLoads: number[]
+): { semesters: Semester[]; placed: PlacedPick[] } {
+  const semesters: Semester[] = plan.semesters.map((s) => ({ ...s, courses: [...s.courses] }));
+  // Standalone labeled rows ("Other") are buckets for AP/transfer credit
+  // already earned, not terms you can enroll in — never schedule into one.
+  // They stay in `baseLoads` so the cost estimate still matches computeCost.
+  const placeable = semesters
+    .map((s, i) => (s.rowLabel ? -1 : i))
+    .filter((i) => i >= 0);
+  const loads = [...baseLoads];
+  const counts = semesters.map((s) => s.courses.length);
+  const placedTerm = new Map<CourseCode, number>();
+  semesters.forEach((s, t) => s.courses.forEach((c) => placedTerm.set(c.code, t)));
+
+  const placed: PlacedPick[] = [];
+
+  for (const pick of picks) {
+    const isTransfer = transferred.has(pick.code);
+    const earliest = Math.max(0, pick.after ? (placedTerm.get(pick.after) ?? -1) + 1 : 0);
+    const latest = Math.min(
+      semesters.length - 1,
+      pick.before ? (placedTerm.get(pick.before) ?? semesters.length) - 1 : semesters.length - 1
+    );
+
+    const window = placeable.filter((t) => t >= earliest && t <= latest);
+
+    let target = -1;
+    if (isTransfer) {
+      // A transfer course costs the same wherever it sits, so put it where
+      // it reads best: the lightest term that's still allowed.
+      for (const t of window) {
+        if (counts[t] >= MAX_COURSES_PER_TERM) continue;
+        if (target === -1 || loads[t] < loads[target]) target = t;
+      }
+    } else {
+      for (const t of window) {
+        if (counts[t] >= MAX_COURSES_PER_TERM) continue;
+        if (loads[t] + pick.credits <= TARGET_CREDITS_PER_TERM) {
+          target = t;
+          break;
+        }
+      }
+    }
+    // Every allowed term is full. Overfill one rather than drop the course,
+    // preferring to keep the sequence order intact.
+    if (target === -1) {
+      target = window.length
+        ? window[window.length - 1]
+        : placeable[placeable.length - 1] ?? 0;
+    }
+
+    const sem = semesters[target];
+    sem.courses.push(
+      isTransfer && pick.transfer
+        ? {
+            code: pick.code,
+            source: "transfer",
+            transferFrom: {
+              school: pick.transfer.school,
+              code: pick.transfer.code,
+              title: pick.transfer.title,
+              credits: pick.transfer.credits,
+            },
+          }
+        : { code: pick.code, source: "native" }
+    );
+
+    if (!isTransfer) loads[target] += pick.credits;
+    counts[target] += 1;
+    placedTerm.set(pick.code, target);
+
+    placed.push({
+      code: pick.code,
+      name: (catalog[pick.code] as CatalogCourse | undefined)?.name ?? pick.code,
+      credits: pick.credits,
+      reason: pick.reason,
+      detail: pick.detail,
+      semesterId: sem.id,
+      termLabel: `${sem.term} ${sem.year}`,
+      transfer: isTransfer ? pick.transfer : undefined,
+    });
+  }
+
+  return { semesters, placed };
+}
+
+/* ------------------------------------------------------------------ */
 /* entry point                                                         */
 /* ------------------------------------------------------------------ */
 
@@ -441,7 +543,8 @@ export function autocompletePlan(
   major: MajorRequirements,
   genEd: GenEdRequirements,
   catalog: CourseCatalog,
-  index: TransferIndex
+  index: TransferIndex,
+  schoolCosts: SchoolCostMap = {}
 ): AutocompleteResult {
   const existing = new Set<CourseCode>(
     plan.semesters.flatMap((s) => s.courses.map((c) => c.code))
@@ -480,95 +583,40 @@ export function autocompletePlan(
     .filter((c) => c.source !== "transfer")
     .reduce((sum, c) => sum + creditsOf(catalog, c.code), 0);
 
-  const { transferred, total, allNative, residencyCapped } = chooseTransfers(
+  const { transferred, residencyCapped } = chooseTransfers(
     picks,
     baseLoads,
     existingNativeCredits
   );
 
-  /* ---- lay the picks out across the terms ---- */
+  const { semesters, placed } = schedule(plan, picks, transferred, catalog, baseLoads);
 
-  const semesters: Semester[] = plan.semesters.map((s) => ({ ...s, courses: [...s.courses] }));
-  const loads = [...baseLoads];
-  const counts = semesters.map((s) => s.courses.length);
-  const placedTerm = new Map<CourseCode, number>();
-  semesters.forEach((s, t) => s.courses.forEach((c) => placedTerm.set(c.code, t)));
-
-  const placed: PlacedPick[] = [];
-
-  for (const pick of picks) {
-    const isTransfer = transferred.has(pick.code);
-    const earliest = Math.max(0, pick.after ? (placedTerm.get(pick.after) ?? -1) + 1 : 0);
-    const latest = Math.min(
-      semesters.length - 1,
-      pick.before ? (placedTerm.get(pick.before) ?? semesters.length) - 1 : semesters.length - 1
-    );
-
-    let target = -1;
-    if (isTransfer) {
-      // A transfer course costs the same wherever it sits, so put it where
-      // it reads best: the lightest term that's still allowed.
-      for (let t = earliest; t <= latest; t++) {
-        if (counts[t] >= MAX_COURSES_PER_TERM) continue;
-        if (target === -1 || loads[t] < loads[target]) target = t;
-      }
-    } else {
-      for (let t = earliest; t <= latest; t++) {
-        if (counts[t] >= MAX_COURSES_PER_TERM) continue;
-        if (loads[t] + pick.credits <= TARGET_CREDITS_PER_TERM) {
-          target = t;
-          break;
-        }
-      }
-    }
-    // Every allowed term is full. Overfill one rather than drop the course,
-    // preferring to keep the sequence order intact.
-    if (target === -1) target = Math.max(0, Math.min(latest, Math.max(earliest, 0)));
-
-    const sem = semesters[target];
-    sem.courses.push(
-      isTransfer && pick.transfer
-        ? {
-            code: pick.code,
-            source: "transfer",
-            transferFrom: {
-              school: pick.transfer.school,
-              code: pick.transfer.code,
-              title: pick.transfer.title,
-              credits: pick.transfer.credits,
-            },
-          }
-        : { code: pick.code, source: "native" }
-    );
-
-    if (!isTransfer) loads[target] += pick.credits;
-    counts[target] += 1;
-    placedTerm.set(pick.code, target);
-
-    placed.push({
-      code: pick.code,
-      name: (catalog[pick.code] as CatalogCourse | undefined)?.name ?? pick.code,
-      credits: pick.credits,
-      reason: pick.reason,
-      detail: pick.detail,
-      semesterId: sem.id,
-      termLabel: `${sem.term} ${sem.year}`,
-      transfer: isTransfer ? pick.transfer : undefined,
-    });
-  }
+  // Both headline figures come from the SAME cost function the sidebar uses,
+  // run over two real plans. The sweep's internal estimate is only ever used
+  // to choose what to transfer — anything shown to the user is computed here,
+  // so the preview and the sidebar can't disagree. (The estimate omits the
+  // cost of transfer courses already in the plan, which is constant across
+  // the sweep and so harmless there, but would be wrong on screen.)
+  const proposed: StudentPlan = { ...plan, semesters };
+  const baseline: StudentPlan = {
+    ...plan,
+    semesters: schedule(plan, picks, new Set<CourseCode>(), catalog, baseLoads).semesters,
+  };
+  const estimatedTotal = computeCost(proposed, catalog, schoolCosts).totalCost;
+  const allNativeTotal = computeCost(baseline, catalog, schoolCosts).totalCost;
 
   const transferCount = placed.filter((p) => p.transfer).length;
 
   return {
-    plan: { ...plan, semesters, updatedAt: new Date().toISOString() },
+    plan: { ...proposed, updatedAt: new Date().toISOString() },
     placed,
     nativeCount: placed.length - transferCount,
     transferCount,
     creditsBefore,
     creditsAfter: creditsBefore + picks.reduce((sum, p) => sum + p.credits, 0),
-    estimatedTotal: total,
-    allNativeTotal: allNative,
-    saved: Math.max(0, allNative - total),
+    estimatedTotal,
+    allNativeTotal,
+    saved: Math.max(0, allNativeTotal - estimatedTotal),
     unfilled,
     alreadyComplete: false,
     pittCredits:

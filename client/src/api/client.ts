@@ -218,7 +218,8 @@ export const api = {
       core.major,
       core.genEd,
       core.catalog,
-      index
+      index,
+      core.cost
     );
   },
 
