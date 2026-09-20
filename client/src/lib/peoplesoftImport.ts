@@ -209,7 +209,12 @@ export function buildPlanFromRows(
     };
   }
   const minYear = Math.min(...startYears);
-  const maxYear = Math.max(...startYears);
+  const reportMaxYear = Math.max(...startYears);
+  // A CS degree spans 4 years; always render at least 4 academic-year rows,
+  // padding with empty future years when the report covers fewer (e.g. a
+  // report that only reaches sophomore year still shows Years 3-4 to plan in).
+  const MIN_YEAR_ROWS = 4;
+  const maxYear = Math.max(reportMaxYear, minYear + MIN_YEAR_ROWS - 1);
 
   // Build ordered (season, calendarYear) slots for each academic year.
   const semesters: Semester[] = [];
