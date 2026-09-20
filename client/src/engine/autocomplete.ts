@@ -6,6 +6,7 @@ import type {
   MajorRequirements,
   Semester,
   StudentPlan,
+  Term,
 } from "../types";
 import {
   CAPSTONE_CODES,
@@ -44,6 +45,14 @@ import type { SchoolCostMap } from "./serverTypes";
 const TARGET_CREDITS_PER_TERM = 15;
 /** Soft cap on how many courses we'll stack into one term. */
 const MAX_COURSES_PER_TERM = 6;
+/**
+ * Transfer courses are only ever scheduled into Summer terms — you take them
+ * elsewhere while Pitt is out of session, rather than swapping them for a
+ * course you'd otherwise be enrolled in. This bounds how much can be
+ * transferred at all (summer slots are finite), which `chooseTransfers`
+ * accounts for so the optimizer never picks more than can actually be placed.
+ */
+const TRANSFER_TERM: Term = "Summer";
 /** Credits assumed for a catalog course that doesn't specify. */
 const ASSUMED_CREDITS = 3;
 
@@ -135,6 +144,12 @@ export interface AutocompleteResult {
   pittCredits: number;
   /** True when the residency floor stopped it transferring more. */
   residencyCapped: boolean;
+  /** True when summer capacity, not cost, limited how much was transferred. */
+  summerCapped: boolean;
+  /** Credits the degree requires (120) — for reporting against creditsAfter. */
+  creditsRequired: number;
+  /** True when the plan reaches the degree credit total. */
+  meetsCreditRequirement: boolean;
 }
 
 /* ------------------------------------------------------------------ */
@@ -340,6 +355,12 @@ function pickCourses(
     [...existing].reduce((sum, c) => sum + creditsOf(catalog, c), 0) +
     picks.reduce((sum, p) => sum + p.credits, 0);
 
+  // Top up to the degree total. The 120 is a FLOOR, not a target: graduation
+  // needs at least that many credits, so we add whole courses until it's
+  // cleared and stop at the first total that does. An exact landing isn't
+  // generally reachable — nearly every catalog course is 3 credits while
+  // MATH 0220 is 4, so totals run 4 + 3n and the smallest one clearing 120
+  // is 121. Prefer a filler that lands exactly when the arithmetic allows.
   let remaining = major.totalDegreeCredits - plannedCredits;
   if (remaining > 0) {
     // The cheapest courses to transfer anywhere, since a free elective has
@@ -347,12 +368,20 @@ function pickCourses(
     const fillers = Object.keys(index)
       .filter((c) => !chosen.has(c) && catalog[c])
       .sort(cheapest);
-    for (const code of fillers) {
-      if (remaining <= 0) break;
+    let cursor = 0;
+    while (remaining > 0 && cursor < fillers.length) {
+      const exact = fillers.find(
+        (c) => !chosen.has(c) && creditsOf(catalog, c) === remaining
+      );
+      const code = exact ?? fillers.slice(cursor).find((c) => !chosen.has(c));
+      if (!code) break;
+      cursor = Math.max(cursor, fillers.indexOf(code) + 1);
       add(code, "Free elective", "Counts toward the 120-credit total");
       remaining -= creditsOf(catalog, code);
     }
-    if (remaining > 0) unfilled.push(`${remaining} free-elective credits`);
+    if (remaining > 0) {
+      unfilled.push(`${remaining} credits short of ${major.totalDegreeCredits}`);
+    }
   }
 
   return { picks, unfilled };
@@ -394,12 +423,14 @@ const pittCostOf = (loads: number[]): number =>
 function chooseTransfers(
   picks: Pick[],
   baseLoads: number[],
-  existingNativeCredits: number
+  existingNativeCredits: number,
+  summerCapacity: number
 ): {
   transferred: Set<CourseCode>;
   total: number;
   allNative: number;
   residencyCapped: boolean;
+  summerCapped: boolean;
 } {
   const candidates = picks
     .filter((p) => p.transferable && p.transfer)
@@ -424,6 +455,11 @@ function chooseTransfers(
   while (maxK > 0 && costAt(maxK).native < MIN_PITT_CREDITS) maxK--;
   const residencyCapped = maxK < candidates.length;
 
+  // Transfers can only be scheduled into summers, so never choose more than
+  // there are summer slots to put them in.
+  const summerCapped = summerCapacity < maxK;
+  if (summerCapped) maxK = summerCapacity;
+
   const allNative = costAt(0).total;
   let best = { total: allNative, set: new Set<CourseCode>() };
   for (let k = 1; k <= maxK; k++) {
@@ -431,7 +467,7 @@ function chooseTransfers(
     if (attempt.total < best.total) best = { total: attempt.total, set: attempt.set };
   }
 
-  return { transferred: best.set, total: best.total, allNative, residencyCapped };
+  return { transferred: best.set, total: best.total, allNative, residencyCapped, summerCapped };
 }
 
 /* ------------------------------------------------------------------ */
@@ -457,6 +493,14 @@ function schedule(
   const placeable = semesters
     .map((s, i) => (s.rowLabel ? -1 : i))
     .filter((i) => i >= 0);
+  const summers = placeable.filter((i) => semesters[i].term === TRANSFER_TERM);
+  // Native courses prefer Fall/Spring, so the summers stay free for the
+  // transfers that can only go there. They fall back to summers only if the
+  // academic-year terms genuinely run out of room.
+  const nativeOrder = [
+    ...placeable.filter((i) => semesters[i].term !== TRANSFER_TERM),
+    ...summers,
+  ];
   const loads = [...baseLoads];
   const counts = semesters.map((s) => s.courses.length);
   const placedTerm = new Map<CourseCode, number>();
@@ -472,15 +516,17 @@ function schedule(
       pick.before ? (placedTerm.get(pick.before) ?? semesters.length) - 1 : semesters.length - 1
     );
 
-    const window = placeable.filter((t) => t >= earliest && t <= latest);
+    const pool = isTransfer ? summers : nativeOrder;
+    const window = pool.filter((t) => t >= earliest && t <= latest);
 
     let target = -1;
     if (isTransfer) {
-      // A transfer course costs the same wherever it sits, so put it where
-      // it reads best: the lightest term that's still allowed.
+      // Summer only, and spread across the summers rather than stacking the
+      // first one full. Cost doesn't depend on which term a transfer sits in,
+      // so this is purely about the plan reading sensibly.
       for (const t of window) {
         if (counts[t] >= MAX_COURSES_PER_TERM) continue;
-        if (target === -1 || loads[t] < loads[target]) target = t;
+        if (target === -1 || counts[t] < counts[target]) target = t;
       }
     } else {
       for (const t of window) {
@@ -494,9 +540,16 @@ function schedule(
     // Every allowed term is full. Overfill one rather than drop the course,
     // preferring to keep the sequence order intact.
     if (target === -1) {
-      target = window.length
-        ? window[window.length - 1]
-        : placeable[placeable.length - 1] ?? 0;
+      const fallback = window.length ? window : pool;
+      if (!fallback.length) {
+        target = placeable[placeable.length - 1] ?? 0;
+      } else if (isTransfer) {
+        // Keep the summer-only guarantee even when every summer is full —
+        // overfill the emptiest one rather than leaking into a Pitt term.
+        target = fallback.reduce((a, t) => (counts[t] < counts[a] ? t : a), fallback[0]);
+      } else {
+        target = fallback[fallback.length - 1];
+      }
     }
 
     const sem = semesters[target];
@@ -568,6 +621,9 @@ export function autocompletePlan(
       alreadyComplete: true,
       pittCredits: creditsBefore,
       residencyCapped: false,
+      summerCapped: false,
+      creditsRequired: major.totalDegreeCredits,
+      meetsCreditRequirement: creditsBefore >= major.totalDegreeCredits,
     };
   }
 
@@ -583,10 +639,16 @@ export function autocompletePlan(
     .filter((c) => c.source !== "transfer")
     .reduce((sum, c) => sum + creditsOf(catalog, c.code), 0);
 
-  const { transferred, residencyCapped } = chooseTransfers(
+  // How many transfer courses the summers can actually hold.
+  const summerCapacity = plan.semesters
+    .filter((s) => !s.rowLabel && s.term === TRANSFER_TERM)
+    .reduce((sum, s) => sum + Math.max(0, MAX_COURSES_PER_TERM - s.courses.length), 0);
+
+  const { transferred, residencyCapped, summerCapped } = chooseTransfers(
     picks,
     baseLoads,
-    existingNativeCredits
+    existingNativeCredits,
+    summerCapacity
   );
 
   const { semesters, placed } = schedule(plan, picks, transferred, catalog, baseLoads);
@@ -606,6 +668,8 @@ export function autocompletePlan(
   const allNativeTotal = computeCost(baseline, catalog, schoolCosts).totalCost;
 
   const transferCount = placed.filter((p) => p.transfer).length;
+  const creditsAfterTotal =
+    creditsBefore + picks.reduce((sum, p) => sum + p.credits, 0);
 
   return {
     plan: { ...proposed, updatedAt: new Date().toISOString() },
@@ -613,7 +677,7 @@ export function autocompletePlan(
     nativeCount: placed.length - transferCount,
     transferCount,
     creditsBefore,
-    creditsAfter: creditsBefore + picks.reduce((sum, p) => sum + p.credits, 0),
+    creditsAfter: creditsAfterTotal,
     estimatedTotal,
     allNativeTotal,
     saved: Math.max(0, allNativeTotal - estimatedTotal),
@@ -623,5 +687,8 @@ export function autocompletePlan(
       existingNativeCredits +
       picks.filter((p) => !transferred.has(p.code)).reduce((sum, p) => sum + p.credits, 0),
     residencyCapped,
+    summerCapped,
+    creditsRequired: major.totalDegreeCredits,
+    meetsCreditRequirement: creditsAfterTotal >= major.totalDegreeCredits,
   };
 }

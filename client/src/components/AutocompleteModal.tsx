@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Info, Sparkles, TrendingDown } from "lucide-react";
+import { AlertTriangle, ArrowRight, Info, Sparkles, TrendingDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -144,7 +144,7 @@ export default function AutocompleteModal({ result, onApply, onCancel }: Props) 
             from {result.creditsBefore} to{" "}
             <strong className="text-foreground">{result.creditsAfter} credits</strong>, with{" "}
             <strong className="text-foreground">{result.pittCredits}</strong> of them earned
-            at Pitt.
+            at Pitt. Transfers are all taken over the summer.
           </p>
         </div>
 
@@ -155,6 +155,26 @@ export default function AutocompleteModal({ result, onApply, onCancel }: Props) 
               No transfer route beat taking everything at Pitt here. At 12+ credits a term
               Pitt charges one flat rate, so a transfer only pays off when it empties a
               term outright.
+            </span>
+          </div>
+        )}
+
+        {!result.meetsCreditRequirement && (
+          <div className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-[0.78rem]">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
+            <span>
+              This plan reaches {result.creditsAfter} credits, short of the{" "}
+              {result.creditsRequired} needed to graduate. Add the difference by hand.
+            </span>
+          </div>
+        )}
+
+        {result.summerCapped && (
+          <div className="flex items-start gap-2 rounded-lg border border-border/70 bg-muted/40 px-3 py-2 text-[0.78rem]">
+            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <span>
+              More could be transferred, but transfers are taken over the summer and the
+              summer terms are full. Freeing up a summer would let this go lower.
             </span>
           </div>
         )}

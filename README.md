@@ -168,6 +168,12 @@ that file:
   Pitt policy** — check the Dietrich School's residency and transfer-credit
   rules before trusting a plan this produces. Set it to 0 to see the
   unconstrained cheapest path.
+- **Transfers are taken over the summer, and only there.** Native Pitt
+  courses prefer Fall/Spring so the summers stay free for them. That bounds
+  how much can be transferred at all — four summers at
+  `MAX_COURSES_PER_TERM` each — and `chooseTransfers` caps its selection to
+  that capacity, so the optimizer never picks more than can be placed. When
+  the cap is what stopped it going cheaper, the preview says so.
 - **Capstones aren't transferred.** `CS 1900/1950/1980/1906` are excluded
   from transfer candidates — an internship or team-project capstone isn't
   something you take at another school.
@@ -178,8 +184,16 @@ that file:
 - **Gen-ed overlap is allowed.** One course satisfying two categories
   satisfies both without being taken twice, which is cheaper and matches how
   Pitt treats the overlap.
-- **Target load is 15 credits/term**, up to 6 courses; free electives top the
-  plan up to `totalDegreeCredits` (120) and may overshoot by a course.
+- **Target load is 15 credits/term**, up to 6 courses.
+- **The 120-credit total is a floor and is guaranteed.** Free electives are
+  added until `totalDegreeCredits` is cleared; the result carries
+  `meetsCreditRequirement`, and the preview shows a red warning if a plan
+  ever comes up short. Note that landing *exactly* on 120 is not reachable
+  with the current catalog: 2,245 of its 2,247 courses are 3 credits and
+  `MATH 0220` (required Calc 1) is 4, so every total is `4 + 3n` and the
+  smallest one clearing 120 is **121**. That is the minimum overshoot, not
+  a rounding bug — it would change only if real per-course credit data
+  replaced the `default-assumed` 3s.
 - **Labeled rows are never scheduled into.** A semester carrying a `rowLabel`
   (the "Other" bucket that PDF import creates for AP/transfer credit) is a
   record of credit already earned, not a term you can enroll in.
