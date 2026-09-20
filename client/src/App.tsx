@@ -13,6 +13,7 @@ import SemesterBoard from "./components/SemesterBoard";
 import AddCourseModal from "./components/AddCourseModal";
 import TransferSearch from "./components/TransferSearch";
 import DuplicateCourseModal from "./components/DuplicateCourseModal";
+import DebugPanel from "./components/DebugPanel";
 import {
   buildGenEdTagIndex,
   buildMajorTagIndex,
@@ -167,6 +168,23 @@ export default function App() {
     });
   }
 
+  /** Debug/demo: replace the whole plan with a sample, or clear it. The
+   *  existing plan effect persists + re-evaluates automatically. */
+  function loadSamplePlan(sample: StudentPlan) {
+    setPlan(sample);
+    setTab("planner");
+  }
+
+  function clearPlan() {
+    setPlan((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        semesters: prev.semesters.map((s) => ({ ...s, courses: [] })),
+      };
+    });
+  }
+
   if (error) {
     return (
       <div className="mx-auto max-w-lg p-10">
@@ -259,6 +277,8 @@ export default function App() {
           }}
         />
       )}
+
+      <DebugPanel onLoadPlan={loadSamplePlan} onClearPlan={clearPlan} />
     </div>
   );
 }
