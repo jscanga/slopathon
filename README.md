@@ -37,4 +37,4 @@ live requirements checklist that tracks what's satisfied.
 
 ## Wanna See?
 
-[Try it Out!](https://transfr-one.vercel.app/)
+[Try it Out!](https://transfr.tech/)
