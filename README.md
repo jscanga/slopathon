@@ -9,13 +9,29 @@ degree timeline: a semester-by-semester grid where you add courses, and a
 live requirements checklist that tracks what's satisfied.
 
 
-## Structure
+## Tech stack
 
-```
-server/   Express + TypeScript API. Owns the data and the requirement-
-          evaluation logic (source of truth for "is this plan valid?").
-client/   Vite + React + TypeScript frontend. Semester grid + sidebar.
-```
+**Frontend**
+- React 18 + TypeScript 5.5
+- Vite 5 (build + dev server)
+- Tailwind CSS 3.4, with `tailwind-merge`, `clsx`, `class-variance-authority`, `tailwindcss-animate`
+- Radix UI primitives (dialog, select, tabs, progress) via shadcn-style components
+- lucide-react for icons
+- Inline SVG for the seasonal term art — no image assets
+- Source Serif 4 / IBM Plex Sans / IBM Plex Mono
+
+**Backend**
+- Express 4 + TypeScript (local dev; production runs fully static)
+- tsx for dev-mode execution
+
+**Data & persistence**
+- Static JSON served from the CDN; requirement and cost engine runs in-browser
+- `localStorage` for plan persistence
+- U.S. Dept. of Education College Scorecard API for school cost and online-share data
+- Pitt's official transfer equivalency database (43,239 rows, 1,801 schools)
+
+**Deployment**
+- Vercel
 
 ## Running it
 
