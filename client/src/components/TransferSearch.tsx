@@ -74,12 +74,12 @@ export default function TransferSearch({ plan, catalog, onAddTransferCourse }: P
     setLoading(true);
     const handle = setTimeout(() => {
       api
-        .searchTransferEquivalencies(q, sort)
+        .searchTransferEquivalencies(q, sort, minOnline)
         .then(setResults)
         .finally(() => setLoading(false));
     }, 250);
     return () => clearTimeout(handle);
-  }, [query, sort]);
+  }, [query, sort, minOnline]);
 
   return (
     <div className="mx-auto max-w-[1000px]">
@@ -153,14 +153,16 @@ export default function TransferSearch({ plan, catalog, onAddTransferCourse }: P
       {loading && <p className="mb-4 text-sm text-muted-foreground">Searching…</p>}
       {!loading && results.length === 0 && totalCount !== 0 && (
         <p className="mb-4 text-sm text-muted-foreground">
-          {query.trim() ? `No equivalencies found for "${query}".` : "Type to search."}
+          {!query.trim()
+            ? "Type to search."
+            : minOnline > 0
+            ? `No equivalencies for "${query}" at a school that's ${minOnline}%+ online.`
+            : `No equivalencies found for "${query}".`}
         </p>
       )}
 
       <div className="flex w-full flex-col gap-2">
-        {results
-          .filter((eq) => minOnline === 0 || ((eq.cost as any)?.onlineSharePct ?? -1) >= minOnline)
-          .map((eq, i) => (
+        {results.map((eq, i) => (
           <div
             key={`${eq.externalSchool}-${eq.externalCourse.code}-${i}`}
             className="grid grid-cols-1 items-center gap-3 rounded-lg border bg-card p-3.5 shadow-sm transition-shadow hover:shadow-soft sm:grid-cols-[1fr_auto_1fr_auto_auto] sm:gap-4"

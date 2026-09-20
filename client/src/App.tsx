@@ -13,13 +13,16 @@ import SemesterBoard from "./components/SemesterBoard";
 import AddCourseModal from "./components/AddCourseModal";
 import TransferSearch from "./components/TransferSearch";
 import DuplicateCourseModal from "./components/DuplicateCourseModal";
+import AutocompleteModal from "./components/AutocompleteModal";
+import type { AutocompleteResult } from "./engine/autocomplete";
 import {
   buildGenEdTagIndex,
   buildMajorTagIndex,
   mergeTagIndexes,
 } from "./lib/genEdIndex";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { GraduationCap } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { GraduationCap, Sparkles, Undo2, X } from "lucide-react";
 
 type Tab = "planner" | "transfer";
 
@@ -42,6 +45,10 @@ export default function App() {
   const [selectedMajorId, setSelectedMajorId] = useState<string>("cs-bs-2023");
   const [pendingAdd, setPendingAdd] = useState<PendingAdd | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [autocompleting, setAutocompleting] = useState(false);
+  const [autoPreview, setAutoPreview] = useState<AutocompleteResult | null>(null);
+  /** The plan as it was before the last autocomplete, so it can be undone. */
+  const [undoPlan, setUndoPlan] = useState<StudentPlan | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -153,6 +160,35 @@ export default function App() {
     requestAdd(semesterId, code, "transfer", transferFrom);
   }
 
+  /** Builds an autocomplete proposal. Nothing is committed until the user
+   *  confirms in the preview — the first run also has to pull the 12MB
+   *  equivalency table, hence the pending state. */
+  async function requestAutocomplete() {
+    if (!plan) return;
+    setAutocompleting(true);
+    try {
+      setAutoPreview(await api.autocompletePlan(plan));
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setAutocompleting(false);
+    }
+  }
+
+  function applyAutocomplete() {
+    if (!autoPreview || !plan) return;
+    setUndoPlan(plan);
+    setPlan(autoPreview.plan);
+    setAutoPreview(null);
+    setTab("planner");
+  }
+
+  function undoAutocomplete() {
+    if (!undoPlan) return;
+    setPlan(undoPlan);
+    setUndoPlan(null);
+  }
+
   function removeCourse(semesterId: string, code: string) {
     setPlan((prev) => {
       if (!prev) return prev;
@@ -208,6 +244,8 @@ export default function App() {
           majorOptions={majorOptions}
           selectedMajorId={selectedMajorId}
           onSelectMajor={setSelectedMajorId}
+          onAutocomplete={requestAutocomplete}
+          autocompleting={autocompleting}
         />
       </aside>
 
@@ -241,6 +279,32 @@ export default function App() {
           onClose={() => setModalSemesterId(null)}
           onPick={(code) => addCourse(modalSemesterId, code)}
         />
+      )}
+
+      {autoPreview && (
+        <AutocompleteModal
+          result={autoPreview}
+          onApply={applyAutocomplete}
+          onCancel={() => setAutoPreview(null)}
+        />
+      )}
+
+      {undoPlan && (
+        <div className="fixed left-1/2 top-[4.5rem] z-50 flex -translate-x-1/2 items-center gap-3 rounded-full border border-primary/25 bg-card/95 py-2 pl-4 pr-2 shadow-soft backdrop-blur-sm">
+          <span className="flex items-center gap-1.5 text-sm text-foreground">
+            <Sparkles className="h-3.5 w-3.5 text-primary" /> Plan filled in.
+          </span>
+          <Button size="sm" variant="outline" onClick={undoAutocomplete}>
+            <Undo2 className="h-3.5 w-3.5" /> Undo
+          </Button>
+          <button
+            className="rounded-full p-1 text-muted-foreground/70 transition-colors hover:text-foreground"
+            onClick={() => setUndoPlan(null)}
+            aria-label="Dismiss"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
       )}
 
       {pendingAdd && (

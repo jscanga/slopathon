@@ -6,7 +6,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PiggyBank, TrendingDown } from "lucide-react";
+import { Loader2, PiggyBank, Sparkles, TrendingDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { useCountUp } from "@/lib/useCountUp";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +16,8 @@ interface Props {
   majorOptions: Array<{ id: string; name: string }>;
   selectedMajorId: string;
   onSelectMajor: (id: string) => void;
+  onAutocomplete: () => void;
+  autocompleting: boolean;
 }
 
 function ProgressRing({ pct }: { pct: number }) {
@@ -124,6 +127,8 @@ export default function PlanSummary({
   majorOptions,
   selectedMajorId,
   onSelectMajor,
+  onAutocomplete,
+  autocompleting,
 }: Props) {
   const pct = evaluation
     ? Math.min(
@@ -140,6 +145,22 @@ export default function PlanSummary({
     <div className="flex flex-col gap-4">
       {/* Estimated cost — the focal point, first thing you see. */}
       <CostHero evaluation={evaluation} />
+
+      <Button
+        className="w-full"
+        onClick={onAutocomplete}
+        disabled={autocompleting || !evaluation}
+      >
+        {autocompleting ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" /> Finding the cheapest path…
+          </>
+        ) : (
+          <>
+            <Sparkles className="h-4 w-4" /> Autocomplete my degree
+          </>
+        )}
+      </Button>
 
       <div className="rounded-xl border border-border/70 bg-card/70 p-4 shadow-soft">
         <ProgressRing pct={pct} />

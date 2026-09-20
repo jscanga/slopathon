@@ -8,6 +8,11 @@ import type {
   TransferSortKey,
 } from "../types";
 import { evaluatePlan as runEvaluate } from "../engine/evaluatePlan";
+import {
+  autocompletePlan as runAutocomplete,
+  type AutocompleteResult,
+  type TransferIndex,
+} from "../engine/autocomplete";
 import { effectiveRate } from "../lib/residency";
 
 /**
@@ -124,6 +129,48 @@ function sortEquivalencies(rows: any[], key: TransferSortKey): any[] {
   });
 }
 
+/* ---- cheapest transfer option per Pitt course ---- */
+
+/**
+ * Collapses the 43k-row equivalency table into one row per Pitt course: the
+ * cheapest school you could take it at. Generic department placeholders
+ * (e.g. MATH 0000) are skipped — they transfer as unallocated credit and
+ * satisfy no specific requirement, so autocomplete must not treat them as a
+ * way to tick a box. Built once, then cached.
+ */
+let indexPromise: Promise<TransferIndex> | null = null;
+function loadTransferIndex(): Promise<TransferIndex> {
+  if (!indexPromise) {
+    indexPromise = Promise.all([loadTransfer(), loadCore()]).then(([rows, core]) => {
+      const index: TransferIndex = {};
+      for (const eq of rows) {
+        if (eq.isGenericPlaceholder) continue;
+        const pittCode = eq.pittCourse?.code;
+        if (!pittCode) continue;
+        const { effectivePerCredit } = effectiveRate(core.cost[eq.externalSchool]);
+        if (effectivePerCredit == null) continue;
+        // Bill the same credits computeCost() would: the sending school's
+        // figure when it stated one, else the Pitt catalog's.
+        const billed = eq.externalCourse?.credits ?? core.catalog[pittCode]?.credits ?? 3;
+        const totalCost = effectivePerCredit * billed;
+        const current = index[pittCode];
+        if (current && current.totalCost <= totalCost) continue;
+        index[pittCode] = {
+          school: eq.externalSchool,
+          code: eq.externalCourse?.code ?? "",
+          title: eq.externalCourse?.title,
+          credits: eq.externalCourse?.credits,
+          perCredit: effectivePerCredit,
+          onlineSharePct: core.cost[eq.externalSchool]?.onlineSharePct ?? null,
+          totalCost,
+        };
+      }
+      return index;
+    });
+  }
+  return indexPromise;
+}
+
 /* ---- public API (same shape as before) ---- */
 
 export const api = {
@@ -159,9 +206,31 @@ export const api = {
     return rows.map(withCost(core.cost));
   },
 
+  /**
+   * Fills every unsatisfied requirement and lays the result across the 12
+   * terms, routing courses to cheaper schools where that lowers the total.
+   * Returns a proposal — the caller decides whether to commit it.
+   */
+  autocompletePlan: async (plan: StudentPlan): Promise<AutocompleteResult> => {
+    const [core, index] = await Promise.all([loadCore(), loadTransferIndex()]);
+    return runAutocomplete(
+      plan,
+      core.major,
+      core.genEd,
+      core.catalog,
+      index
+    );
+  },
+
+  /** `minOnlinePct` filters to schools whose online share is at least that
+   *  percentage. It is applied across ALL matches, before the 100-row cap —
+   *  filtering the capped page instead would only ever search the cheapest
+   *  100 rows for online options. Schools with no online data are excluded
+   *  once a threshold is set (unknown is not "meets the bar"). */
   searchTransferEquivalencies: async (
     q: string,
-    sort: TransferSortKey = "cost-asc"
+    sort: TransferSortKey = "cost-asc",
+    minOnlinePct = 0
   ): Promise<TransferEquivalencyWithCost[]> => {
     const [rows, core] = await Promise.all([loadTransfer(), loadCore()]);
     const qq = q.trim().toUpperCase();
@@ -175,6 +244,10 @@ export const api = {
         return code.includes(qq) || title.includes(qq) || name.includes(qq);
       });
     }
-    return sortEquivalencies(matched.map(withCost(core.cost)), sort).slice(0, 100);
+    let priced = matched.map(withCost(core.cost));
+    if (minOnlinePct > 0) {
+      priced = priced.filter((eq) => (eq.cost?.onlineSharePct ?? -1) >= minOnlinePct);
+    }
+    return sortEquivalencies(priced, sort).slice(0, 100);
   },
 };

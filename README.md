@@ -125,6 +125,48 @@ provided:
 Because Summer is a real term in the 12-block layout, a Summer term with
 ≥ 12 non-transfer credits is charged the same flat rate as any other term.
 
+## Autocomplete
+
+"Autocomplete my degree" (left sidebar) fills every unsatisfied requirement
+and lays the result across the 12 terms, choosing where to take each course
+so the total comes out as low as the cost model allows. It proposes first —
+nothing is committed until you confirm in the preview — and the change can
+be undone afterwards. It builds *around* whatever is already in your plan
+rather than replacing it, so a hand-placed course is never duplicated or
+moved.
+
+The interesting part is deciding what to transfer. Pitt's rate is flat at
+12+ credits in a term, so pulling one course out of a full term saves
+nothing and adds the other school's tuition on top — savings only appear
+when enough credits leave to drop a term below full-time or empty it. A
+per-course greedy pass can't see that, so the optimizer sorts candidates
+cheapest-first and sweeps the cutoff ("transfer the cheapest k") for every
+k, keeping whichever k actually costs least. See
+`client/src/engine/autocomplete.ts`.
+
+Assumptions worth knowing about, all of them in constants at the top of
+that file:
+
+- **`MIN_PITT_CREDITS = 60`** — a residency floor. Without it the answer is
+  degenerate: transferring is cheaper per credit almost everywhere, so the
+  optimizer empties every term and returns a "Pitt degree" containing two
+  Pitt courses. **60 is a placeholder, not a figure verified against current
+  Pitt policy** — check the Dietrich School's residency and transfer-credit
+  rules before trusting a plan this produces. Set it to 0 to see the
+  unconstrained cheapest path.
+- **Capstones aren't transferred.** `CS 1900/1950/1980/1906` are excluded
+  from transfer candidates — an internship or team-project capstone isn't
+  something you take at another school.
+- **Sequence order is enforced, real prerequisites are not.** Courses inside
+  a declared sequence land in separate, increasing terms (and before any
+  later course in that chain you've already placed). The requirements data
+  still has no prerequisite graph, so nothing outside a sequence is ordered.
+- **Gen-ed overlap is allowed.** One course satisfying two categories
+  satisfies both without being taken twice, which is cheaper and matches how
+  Pitt treats the overlap.
+- **Target load is 15 credits/term**, up to 6 courses; free electives top the
+  plan up to `totalDegreeCredits` (120) and may overshoot by a course.
+
 ## Layout
 
 - **Left sidebar**: large 120-credit progress ring, a Major dropdown

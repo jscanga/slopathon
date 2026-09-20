@@ -13,14 +13,14 @@ import { effectiveRate } from "../lib/residency";
 // Pitt cost constants (from the user's figures):
 // - Full-time (>= 12 credits in a term): flat per-semester charge.
 // - Part-time (1-11 credits): per-credit rate.
-const PITT_FULLTIME_SEMESTER_COST = 12322;
-const PITT_PER_CREDIT_COST = 1026;
-const PITT_FULLTIME_THRESHOLD = 12;
+export const PITT_FULLTIME_SEMESTER_COST = 12322;
+export const PITT_PER_CREDIT_COST = 1026;
+export const PITT_FULLTIME_THRESHOLD = 12;
 
 // Capstone/internship/co-op codes are excluded from the upper-level elective
 // pool. The source data doesn't carry per-course tags, so this list is
 // hardcoded from the major requirements' capstone options.
-const CAPSTONE_CODES = new Set(["CS 1900", "CS 1950", "CS 1980", "CS 1906"]);
+export const CAPSTONE_CODES = new Set(["CS 1900", "CS 1950", "CS 1980", "CS 1906"]);
 
 export interface RequirementStatus {
   id: string;

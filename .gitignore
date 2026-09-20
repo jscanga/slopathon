@@ -15,3 +15,6 @@ dist/
 Claude outputs/
 _to_delete/
 *.tgz
+
+# typescript incremental build cache
+*.tsbuildinfo
