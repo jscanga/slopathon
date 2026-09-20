@@ -94,10 +94,14 @@ backend on port 4000 (see `client/vite.config.ts`).
   `server/src/engine/evaluatePlan.ts`.
 - **Credit hours for most catalog courses are defaulted to 3**,
   tagged `"creditsSource": "default-assumed"` in
-  `server/src/data/courses-catalog.json`. The 15 courses with real known
-  credits (the CS/Math core + capstone options) are tagged `"known"`. If
-  you get real per-course credit data, re-run a merge keeping the `"known"`
-  ones untouched.
+  `server/src/data/courses-catalog.json`. The 17 courses with real known
+  credits (the CS/Math core + capstone options, plus `CMPINF 0010` at 4 and
+  `CMPINF 0001` at 1) are tagged `"known"`. If you get real per-course
+  credit data, re-run a merge keeping the `"known"` ones untouched.
+  `CMPINF 0001` was added by hand — it appears in no source file, so its
+  credits are verified but its **name is a placeholder** waiting on a real
+  title, and nothing references the code, so it's reachable only by
+  searching the "Add course" modal.
 - **Co-op rotation counting** isn't modeled — the capstone requirement is
   satisfied by presence of `CS 1906` in the plan, not by counting 2
   rotations.

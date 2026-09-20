@@ -4219,10 +4219,16 @@
     "creditsSource": "default-assumed",
     "name": "COMPUTING AND INFORMATION TRANSFER (0-99)"
   },
+  "CMPINF 0001": {
+    "attributes": [],
+    "credits": 1,
+    "creditsSource": "known",
+    "name": "CMPINF 0001 (title not in source data)"
+  },
   "CMPINF 0010": {
     "attributes": [],
-    "credits": 3,
-    "creditsSource": "default-assumed",
+    "credits": 4,
+    "creditsSource": "known",
     "name": "BIG IDEAS IN COMPUTING AND INFORMATION"
   },
   "CMPINF 0070": {
