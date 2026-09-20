@@ -14,6 +14,7 @@ import AddCourseModal from "./components/AddCourseModal";
 import TransferSearch from "./components/TransferSearch";
 import DuplicateCourseModal from "./components/DuplicateCourseModal";
 import AutocompleteModal from "./components/AutocompleteModal";
+import ConfirmClearModal from "./components/ConfirmClearModal";
 import type { AutocompleteResult } from "./engine/autocomplete";
 import DebugPanel from "./components/DebugPanel";
 import ImportModal from "./components/ImportModal";
@@ -50,8 +51,10 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [autocompleting, setAutocompleting] = useState(false);
   const [autoPreview, setAutoPreview] = useState<AutocompleteResult | null>(null);
-  /** The plan as it was before the last autocomplete, so it can be undone. */
+  /** The plan as it was before the last bulk change, so it can be undone. */
   const [undoPlan, setUndoPlan] = useState<StudentPlan | null>(null);
+  const [undoLabel, setUndoLabel] = useState("Plan filled in.");
+  const [confirmClear, setConfirmClear] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -181,6 +184,7 @@ export default function App() {
   function applyAutocomplete() {
     if (!autoPreview || !plan) return;
     setUndoPlan(plan);
+    setUndoLabel("Plan filled in.");
     setPlan(autoPreview.plan);
     setAutoPreview(null);
     setTab("planner");
@@ -213,15 +217,23 @@ export default function App() {
     setTab("planner");
   }
 
+  /** Empties every term and drops imported labeled rows ("Other"), leaving
+   *  the term grid itself in place. Undoable. */
   function clearPlan() {
-    setPlan((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        semesters: prev.semesters.map((s) => ({ ...s, courses: [] })),
-      };
+    if (!plan) return;
+    setUndoPlan(plan);
+    setUndoLabel("Plan cleared.");
+    setPlan({
+      ...plan,
+      semesters: plan.semesters
+        .filter((s) => !s.rowLabel)
+        .map((s) => ({ ...s, courses: [] })),
     });
+    setConfirmClear(false);
   }
+
+  const plannedCourses = plan?.semesters.flatMap((s) => s.courses) ?? [];
+  const labeledRowCount = plan?.semesters.filter((s) => s.rowLabel).length ?? 0;
 
 
   if (error) {
@@ -276,6 +288,8 @@ export default function App() {
           onSelectMajor={setSelectedMajorId}
           onAutocomplete={requestAutocomplete}
           autocompleting={autocompleting}
+          onClearPlan={() => setConfirmClear(true)}
+          canClear={plannedCourses.length > 0}
         />
       </aside>
 
@@ -322,7 +336,7 @@ export default function App() {
       {undoPlan && (
         <div className="fixed left-1/2 top-[4.5rem] z-50 flex -translate-x-1/2 items-center gap-3 rounded-full border border-primary/25 bg-card/95 py-2 pl-4 pr-2 shadow-soft backdrop-blur-sm">
           <span className="flex items-center gap-1.5 text-sm text-foreground">
-            <Sparkles className="h-3.5 w-3.5 text-primary" /> Plan filled in.
+            <Sparkles className="h-3.5 w-3.5 text-primary" /> {undoLabel}
           </span>
           <Button size="sm" variant="outline" onClick={undoAutocomplete}>
             <Undo2 className="h-3.5 w-3.5" /> Undo
@@ -335,6 +349,19 @@ export default function App() {
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
+      )}
+
+      {confirmClear && (
+        <ConfirmClearModal
+          courseCount={plannedCourses.length}
+          creditCount={plannedCourses.reduce(
+            (sum, c) => sum + (catalog?.[c.code]?.credits ?? 0),
+            0
+          )}
+          labeledRowCount={labeledRowCount}
+          onConfirm={clearPlan}
+          onCancel={() => setConfirmClear(false)}
+        />
       )}
 
       {pendingAdd && (

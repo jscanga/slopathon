@@ -6,7 +6,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, PiggyBank, Sparkles, TrendingDown } from "lucide-react";
+import { Loader2, PiggyBank, Sparkles, Trash2, TrendingDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCountUp } from "@/lib/useCountUp";
 import { cn } from "@/lib/utils";
@@ -18,6 +18,9 @@ interface Props {
   onSelectMajor: (id: string) => void;
   onAutocomplete: () => void;
   autocompleting: boolean;
+  onClearPlan: () => void;
+  /** False when the plan is already empty, so there's nothing to clear. */
+  canClear: boolean;
 }
 
 function ProgressRing({ pct }: { pct: number }) {
@@ -129,6 +132,8 @@ export default function PlanSummary({
   onSelectMajor,
   onAutocomplete,
   autocompleting,
+  onClearPlan,
+  canClear,
 }: Props) {
   const pct = evaluation
     ? Math.min(
@@ -146,21 +151,34 @@ export default function PlanSummary({
       {/* Estimated cost — the focal point, first thing you see. */}
       <CostHero evaluation={evaluation} />
 
-      <Button
-        className="w-full"
-        onClick={onAutocomplete}
-        disabled={autocompleting || !evaluation}
-      >
-        {autocompleting ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" /> Finding the cheapest path…
-          </>
-        ) : (
-          <>
-            <Sparkles className="h-4 w-4" /> Autocomplete my degree
-          </>
-        )}
-      </Button>
+      <div className="flex flex-col gap-2">
+        <Button
+          className="w-full"
+          onClick={onAutocomplete}
+          disabled={autocompleting || !evaluation}
+        >
+          {autocompleting ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" /> Finding the cheapest path…
+            </>
+          ) : (
+            <>
+              <Sparkles className="h-4 w-4" /> Autocomplete my degree
+            </>
+          )}
+        </Button>
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full text-muted-foreground hover:border-destructive/40 hover:text-destructive"
+          onClick={onClearPlan}
+          disabled={!canClear}
+          title={canClear ? "Remove every course from the plan" : "Your plan is already empty"}
+        >
+          <Trash2 className="h-3.5 w-3.5" /> Clear plan
+        </Button>
+      </div>
 
       <div className="rounded-xl border border-border/70 bg-card/70 p-4 shadow-soft">
         <ProgressRing pct={pct} />
