@@ -169,6 +169,19 @@ export default function AutocompleteModal({ result, onApply, onCancel }: Props) 
           </div>
         )}
 
+        {result.partTimeTerms.length > 0 && (
+          <div className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-[0.78rem]">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
+            <span>
+              {result.partTimeTerms.join(", ")}{" "}
+              {result.partTimeTerms.length === 1 ? "ends" : "end"} below full-time (12
+              credits at Pitt). Courses already placed there can't be moved
+              automatically — shift or add to {result.partTimeTerms.length === 1 ? "it" : "them"}{" "}
+              by hand.
+            </span>
+          </div>
+        )}
+
         {result.summerCapped && (
           <div className="flex items-start gap-2 rounded-lg border border-border/70 bg-muted/40 px-3 py-2 text-[0.78rem]">
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />

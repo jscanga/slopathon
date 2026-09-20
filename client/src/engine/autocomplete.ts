@@ -43,6 +43,23 @@ import type { SchoolCostMap } from "./serverTypes";
 
 /** Credits we aim to put in a term before moving to the next one. */
 const TARGET_CREDITS_PER_TERM = 15;
+/**
+ * Hard ceiling on native credits in one term. Pitt's flat full-time rate
+ * covers 12-18 credits, so filling to 18 costs exactly what 12 does.
+ */
+const MAX_CREDITS_PER_TERM = 18;
+/**
+ * Every Fall/Spring term must end up either empty or full-time. A term
+ * carrying 1-11 native credits is part-time enrollment, which the degree
+ * doesn't allow — and it's also the expensive shape, since those credits
+ * bill per-credit on top of the flat terms around them.
+ *
+ * Greedily filling terms to a fixed 15 stranded the remainder: 61 credits
+ * became 15/15/15/13/3, and that trailing 3-credit term was both invalid
+ * and billed $3,078. So the packer decides how many terms it needs first
+ * and spreads the credits evenly across exactly that many.
+ */
+const MIN_FULLTIME_CREDITS = PITT_FULLTIME_THRESHOLD;
 /** Soft cap on how many courses we'll stack into one term. */
 const MAX_COURSES_PER_TERM = 6;
 /**
@@ -53,8 +70,18 @@ const MAX_COURSES_PER_TERM = 6;
  * accounts for so the optimizer never picks more than can actually be placed.
  */
 const TRANSFER_TERM: Term = "Summer";
-/** Credits assumed for a catalog course that doesn't specify. */
-const ASSUMED_CREDITS = 3;
+/**
+ * Credits for a course code, matching `creditsFor(catalog, code, 0)` in
+ * evaluatePlan — a code the catalog doesn't know counts for NOTHING.
+ *
+ * This has to agree with the engine or the 120-credit floor is measured
+ * against a different number than the sidebar shows. PDF import builds codes
+ * straight from the transcript without checking them against the catalog, so
+ * an imported plan routinely contains codes that are unknown here; assuming
+ * 3 credits for those made autocomplete stop filling early and land a
+ * "121-credit" plan that the sidebar then scored at 115.
+ */
+const UNKNOWN_COURSE_CREDITS = 0;
 
 /**
  * Credits that must be earned AT Pitt, capping how much the optimizer is
@@ -146,6 +173,9 @@ export interface AutocompleteResult {
   residencyCapped: boolean;
   /** True when summer capacity, not cost, limited how much was transferred. */
   summerCapped: boolean;
+  /** Fall/Spring terms left below full-time, which the degree doesn't allow.
+   *  Empty in a healthy plan. */
+  partTimeTerms: string[];
   /** Credits the degree requires (120) — for reporting against creditsAfter. */
   creditsRequired: number;
   /** True when the plan reaches the degree credit total. */
@@ -157,20 +187,13 @@ export interface AutocompleteResult {
 /* ------------------------------------------------------------------ */
 
 const creditsOf = (catalog: CourseCatalog, code: CourseCode): number =>
-  catalog[code]?.credits ?? ASSUMED_CREDITS;
+  catalog[code]?.credits ?? UNKNOWN_COURSE_CREDITS;
 
 const departmentPart = (code: CourseCode): string => code.split(" ")[0];
 
 function numericPart(code: CourseCode): number {
   const m = code.match(/(\d+)/);
   return m ? parseInt(m[1], 10) : NaN;
-}
-
-/** Cost of one term given its native (Pitt) credit load. */
-function termCharge(nativeCredits: number): number {
-  if (nativeCredits >= PITT_FULLTIME_THRESHOLD) return PITT_FULLTIME_SEMESTER_COST;
-  if (nativeCredits > 0) return nativeCredits * PITT_PER_CREDIT_COST;
-  return 0;
 }
 
 /**
@@ -210,7 +233,11 @@ function pickCourses(
   genEd: GenEdRequirements,
   catalog: CourseCatalog,
   index: TransferIndex,
-  existing: Set<CourseCode>
+  existing: Set<CourseCode>,
+  /** Extra credits needed purely to lift already-occupied Fall/Spring terms
+   *  up to full-time. The 120 is a floor, not a ceiling, so overshooting it
+   *  to make a term valid is the right trade. */
+  fullTimeShortfall: number
 ): { picks: Pick[]; unfilled: string[] } {
   const picks: Pick[] = [];
   const unfilled: string[] = [];
@@ -351,9 +378,13 @@ function pickCourses(
 
   /* ---- free electives, to reach the degree total ---- */
 
-  const plannedCredits =
-    [...existing].reduce((sum, c) => sum + creditsOf(catalog, c), 0) +
-    picks.reduce((sum, p) => sum + p.credits, 0);
+  const existingCredits = [...existing].reduce(
+    (sum, c) => sum + creditsOf(catalog, c),
+    0
+  );
+  /** Credits the plan would carry with everything picked so far. */
+  const plannedCredits = () =>
+    existingCredits + picks.reduce((sum, p) => sum + p.credits, 0);
 
   // Top up to the degree total. The 120 is a FLOOR, not a target: graduation
   // needs at least that many credits, so we add whole courses until it's
@@ -361,27 +392,44 @@ function pickCourses(
   // generally reachable — nearly every catalog course is 3 credits while
   // MATH 0220 is 4, so totals run 4 + 3n and the smallest one clearing 120
   // is 121. Prefer a filler that lands exactly when the arithmetic allows.
-  let remaining = major.totalDegreeCredits - plannedCredits;
+  // Repair fillers first: courses that exist purely to lift an occupied
+  // Fall/Spring term to full-time. They are pinned NATIVE — a transferred
+  // course is taken over the summer, so it can never fix a Fall/Spring
+  // term, and leaving these transferable meant the optimizer shipped them
+  // off to summer and left the short term short.
+  const fillers = Object.keys(index)
+    .filter((c) => !chosen.has(c) && catalog[c])
+    .sort(cheapest);
+  let cursor = 0;
+  const nextFiller = (): CourseCode | null => {
+    while (cursor < fillers.length && chosen.has(fillers[cursor])) cursor++;
+    return cursor < fillers.length ? fillers[cursor] : null;
+  };
+
+  let repair = fullTimeShortfall;
+  while (repair > 0) {
+    const code = nextFiller();
+    if (!code) break;
+    add(code, "Free elective", "Brings a term up to full-time", {
+      transferable: false,
+    });
+    repair -= creditsOf(catalog, code);
+  }
+  if (repair > 0) unfilled.push(`${repair} credits to reach full-time enrolment`);
+
+  // Then top up to the degree total.
+  let remaining = major.totalDegreeCredits - plannedCredits();
+  while (remaining > 0) {
+    const exact = fillers.find(
+      (c) => !chosen.has(c) && creditsOf(catalog, c) === remaining
+    );
+    const code = exact ?? nextFiller();
+    if (!code) break;
+    add(code, "Free elective", "Counts toward the 120-credit total");
+    remaining -= creditsOf(catalog, code);
+  }
   if (remaining > 0) {
-    // The cheapest courses to transfer anywhere, since a free elective has
-    // no constraint beyond carrying credit.
-    const fillers = Object.keys(index)
-      .filter((c) => !chosen.has(c) && catalog[c])
-      .sort(cheapest);
-    let cursor = 0;
-    while (remaining > 0 && cursor < fillers.length) {
-      const exact = fillers.find(
-        (c) => !chosen.has(c) && creditsOf(catalog, c) === remaining
-      );
-      const code = exact ?? fillers.slice(cursor).find((c) => !chosen.has(c));
-      if (!code) break;
-      cursor = Math.max(cursor, fillers.indexOf(code) + 1);
-      add(code, "Free elective", "Counts toward the 120-credit total");
-      remaining -= creditsOf(catalog, code);
-    }
-    if (remaining > 0) {
-      unfilled.push(`${remaining} credits short of ${major.totalDegreeCredits}`);
-    }
+    unfilled.push(`${remaining} credits short of ${major.totalDegreeCredits}`);
   }
 
   return { picks, unfilled };
@@ -392,39 +440,23 @@ function pickCourses(
 /* ------------------------------------------------------------------ */
 
 /**
- * Greedily packs native credits into terms, front to back, at
- * TARGET_CREDITS_PER_TERM each — starting from whatever the existing plan
- * already has in each term. Returns the resulting per-term credit loads.
- */
-function packNative(baseLoads: number[], creditList: number[]): number[] {
-  const loads = [...baseLoads];
-  for (const credits of creditList) {
-    let placed = false;
-    for (let t = 0; t < loads.length; t++) {
-      if (loads[t] + credits <= TARGET_CREDITS_PER_TERM) {
-        loads[t] += credits;
-        placed = true;
-        break;
-      }
-    }
-    if (!placed) loads[loads.length - 1] += credits;
-  }
-  return loads;
-}
-
-const pittCostOf = (loads: number[]): number =>
-  loads.reduce((sum, c) => sum + termCharge(c), 0);
-
-/**
- * Chooses which picks to transfer, by sweeping the cheapest-k cutoff and
- * keeping the k with the lowest total cost. See the module comment for why
- * a per-course greedy pass gets this wrong.
+ * Chooses which picks to transfer by sweeping the cheapest-k cutoff and
+ * keeping the k that costs least.
+ *
+ * `costOf` builds the real schedule for a candidate set and prices it with
+ * the same `computeCost` the sidebar uses. An earlier version scored these
+ * with a quick approximation of term packing instead, and once the real
+ * packer grew smarter than the approximation the two disagreed — the sweep
+ * started choosing sets that actually cost MORE than transferring nothing,
+ * which is impossible to reach when k = 0 is always on the table. Scoring
+ * the real thing keeps the choice honest and costs nothing that matters:
+ * it's a few dozen schedules over a few dozen courses.
  */
 function chooseTransfers(
   picks: Pick[],
-  baseLoads: number[],
   existingNativeCredits: number,
-  summerCapacity: number
+  summerCapacity: number,
+  costOf: (transferred: Set<CourseCode>) => number
 ): {
   transferred: Set<CourseCode>;
   total: number;
@@ -436,23 +468,19 @@ function chooseTransfers(
     .filter((p) => p.transferable && p.transfer)
     .sort((a, b) => a.transfer!.totalCost - b.transfer!.totalCost);
 
-  const costAt = (k: number): { total: number; set: Set<CourseCode>; native: number } => {
-    const set = new Set(candidates.slice(0, k).map((c) => c.code));
-    const nativeCredits = picks.filter((p) => !set.has(p.code)).map((p) => p.credits);
-    const transferCost = candidates
-      .slice(0, k)
-      .reduce((sum, c) => sum + c.transfer!.totalCost, 0);
-    return {
-      total: pittCostOf(packNative(baseLoads, nativeCredits)) + transferCost,
-      set,
-      native: existingNativeCredits + nativeCredits.reduce((a, b) => a + b, 0),
-    };
+  const firstK = (k: number) => new Set(candidates.slice(0, k).map((c) => c.code));
+  const nativeCreditsAt = (k: number) => {
+    const set = firstK(k);
+    return (
+      existingNativeCredits +
+      picks.filter((p) => !set.has(p.code)).reduce((sum, p) => sum + p.credits, 0)
+    );
   };
 
   // Candidates are cheapest-first, so native credits fall monotonically as k
   // grows: the residency floor is just a ceiling on k.
   let maxK = candidates.length;
-  while (maxK > 0 && costAt(maxK).native < MIN_PITT_CREDITS) maxK--;
+  while (maxK > 0 && nativeCreditsAt(maxK) < MIN_PITT_CREDITS) maxK--;
   const residencyCapped = maxK < candidates.length;
 
   // Transfers can only be scheduled into summers, so never choose more than
@@ -460,11 +488,12 @@ function chooseTransfers(
   const summerCapped = summerCapacity < maxK;
   if (summerCapped) maxK = summerCapacity;
 
-  const allNative = costAt(0).total;
+  const allNative = costOf(new Set<CourseCode>());
   let best = { total: allNative, set: new Set<CourseCode>() };
   for (let k = 1; k <= maxK; k++) {
-    const attempt = costAt(k);
-    if (attempt.total < best.total) best = { total: attempt.total, set: attempt.set };
+    const set = firstK(k);
+    const total = costOf(set);
+    if (total < best.total) best = { total, set };
   }
 
   return { transferred: best.set, total: best.total, allNative, residencyCapped, summerCapped };
@@ -473,6 +502,60 @@ function chooseTransfers(
 /* ------------------------------------------------------------------ */
 /* scheduling                                                          */
 /* ------------------------------------------------------------------ */
+
+/**
+ * Decides which Fall/Spring terms carry native courses, and how many credits
+ * each should hold, so every used term lands at or above full-time.
+ *
+ * Terms that already contain courses are forced in — autocomplete never moves
+ * what the student placed — so they set a floor on the term count.
+ */
+function budgetNativeTerms(
+  termIdxs: number[],
+  loads: number[],
+  counts: number[],
+  creditsToPlace: number
+): { chosen: Set<number>; target: number; shortfall: boolean } {
+  const forced = termIdxs.filter((t) => loads[t] > 0);
+  const existing = termIdxs.reduce((sum, t) => sum + loads[t], 0);
+  const total = existing + creditsToPlace;
+  if (total <= 0) return { chosen: new Set(), target: TARGET_CREDITS_PER_TERM, shortfall: false };
+
+  /** Credits a term can still absorb — limited by BOTH the credit ceiling
+   *  and the free course slots, which is the part a credits-only estimate
+   *  misses: a term holding four courses has room for two more, however few
+   *  credits those courses carry. */
+  const spare = (t: number) =>
+    Math.max(
+      0,
+      Math.min(
+        MAX_CREDITS_PER_TERM - loads[t],
+        (MAX_COURSES_PER_TERM - counts[t]) * 3
+      )
+    );
+
+  // Walk terms in order taking real capacity until everything fits. Terms
+  // already holding courses are always included — autocomplete can't empty
+  // them, so they're part of the plan whether or not they're needed.
+  const chosen = new Set<number>(forced);
+  let left = creditsToPlace;
+  for (const t of termIdxs) {
+    if (left <= 0 && !chosen.has(t)) break;
+    chosen.add(t);
+    left -= spare(t);
+  }
+
+  return {
+    chosen,
+    target: Math.max(
+      MIN_FULLTIME_CREDITS,
+      Math.min(MAX_CREDITS_PER_TERM, Math.ceil(total / Math.max(1, chosen.size)))
+    ),
+    // True when even the densest packing can't make every used term
+    // full-time — e.g. one existing course sitting alone in a late term.
+    shortfall: total < chosen.size * MIN_FULLTIME_CREDITS,
+  };
+}
 
 /**
  * Lays a set of picks across the plan's terms. Called twice — once with the
@@ -485,7 +568,7 @@ function schedule(
   transferred: Set<CourseCode>,
   catalog: CourseCatalog,
   baseLoads: number[]
-): { semesters: Semester[]; placed: PlacedPick[] } {
+): { semesters: Semester[]; placed: PlacedPick[]; partTimeTerms: string[] } {
   const semesters: Semester[] = plan.semesters.map((s) => ({ ...s, courses: [...s.courses] }));
   // Standalone labeled rows ("Other") are buckets for AP/transfer credit
   // already earned, not terms you can enroll in — never schedule into one.
@@ -497,18 +580,47 @@ function schedule(
   // Native courses prefer Fall/Spring, so the summers stay free for the
   // transfers that can only go there. They fall back to summers only if the
   // academic-year terms genuinely run out of room.
-  const nativeOrder = [
-    ...placeable.filter((i) => semesters[i].term !== TRANSFER_TERM),
-    ...summers,
-  ];
+  const academicTerms = placeable.filter((i) => semesters[i].term !== TRANSFER_TERM);
+  const nativeOrder = [...academicTerms, ...summers];
+
+  // How many Fall/Spring terms to use, and how full each should be, so none
+  // ends up part-time.
+  const nativeCreditsToPlace = picks
+    .filter((p) => !transferred.has(p.code))
+    .reduce((sum, p) => sum + p.credits, 0);
   const loads = [...baseLoads];
   const counts = semesters.map((s) => s.courses.length);
+  const budget = budgetNativeTerms(
+    academicTerms,
+    baseLoads,
+    counts,
+    nativeCreditsToPlace
+  );
   const placedTerm = new Map<CourseCode, number>();
   semesters.forEach((s, t) => s.courses.forEach((c) => placedTerm.set(c.code, t)));
 
   const placed: PlacedPick[] = [];
 
-  for (const pick of picks) {
+  // Sequence courses go down first. They're the constrained ones — each must
+  // sit in a later term than the one before it — so if free electives claim
+  // the early terms first, a chain gets pushed past the end of the packed
+  // terms and strands a lone course in a term of its own. Unchained picks
+  // then fill whatever room is left. Relative order within a chain is
+  // preserved, so a course is still placed after its predecessor.
+  const chained = new Set<CourseCode>();
+  for (const p of picks) {
+    if (p.after) {
+      chained.add(p.code);
+      chained.add(p.after);
+    }
+    if (p.before) chained.add(p.code);
+  }
+  const ordered = [
+    ...picks.filter((p) => chained.has(p.code)),
+    ...picks.filter((p) => !chained.has(p.code)),
+  ];
+
+  for (const pick of ordered) {
     const isTransfer = transferred.has(pick.code);
     const earliest = Math.max(0, pick.after ? (placedTerm.get(pick.after) ?? -1) + 1 : 0);
     const latest = Math.min(
@@ -529,13 +641,29 @@ function schedule(
         if (target === -1 || counts[t] < counts[target]) target = t;
       }
     } else {
-      for (const t of window) {
-        if (counts[t] >= MAX_COURSES_PER_TERM) continue;
-        if (loads[t] + pick.credits <= TARGET_CREDITS_PER_TERM) {
-          target = t;
-          break;
-        }
-      }
+      // Fill the budgeted terms toward their shared target first, then use
+      // the headroom up to the hard cap, and only then open a new term —
+      // opening one early is what leaves a part-time straggler behind.
+      const fits = (t: number, cap: number) =>
+        counts[t] < MAX_COURSES_PER_TERM && loads[t] + pick.credits <= cap;
+      // An empty term trivially "fits" any target, so every clause that can
+      // open a new term has to come after the ones that top up a started
+      // one — otherwise each course starts a fresh term and they all settle
+      // at the target instead of filling, stranding the remainder.
+      const started = (t: number) => loads[t] > 0;
+      target =
+        // A started term below full-time is the most urgent: it's invalid
+        // until it's filled.
+        window.find(
+          (t) => started(t) && loads[t] < MIN_FULLTIME_CREDITS && fits(t, MAX_CREDITS_PER_TERM)
+        ) ??
+        // Then top up started terms, to the target and then to the cap.
+        window.find((t) => started(t) && fits(t, budget.target)) ??
+        window.find((t) => started(t) && fits(t, MAX_CREDITS_PER_TERM)) ??
+        // Only now open one of the budgeted terms.
+        window.find((t) => budget.chosen.has(t) && fits(t, budget.target)) ??
+        window.find((t) => fits(t, MAX_CREDITS_PER_TERM)) ??
+        -1;
     }
     // Every allowed term is full. Overfill one rather than drop the course,
     // preferring to keep the sequence order intact.
@@ -584,7 +712,13 @@ function schedule(
     });
   }
 
-  return { semesters, placed };
+  // Verify the rule actually held rather than assuming the packer got it
+  // right: a Fall/Spring term must end empty or full-time.
+  const partTimeTerms = academicTerms
+    .filter((t) => loads[t] > 0 && loads[t] < MIN_FULLTIME_CREDITS)
+    .map((t) => `${semesters[t].term} ${semesters[t].year}`);
+
+  return { semesters, placed, partTimeTerms };
 }
 
 /* ------------------------------------------------------------------ */
@@ -604,7 +738,27 @@ export function autocompletePlan(
   );
   const creditsBefore = [...existing].reduce((sum, c) => sum + creditsOf(catalog, c), 0);
 
-  const { picks, unfilled } = pickCourses(major, genEd, catalog, index, existing);
+  // Fall/Spring terms that already hold courses but sit below full-time.
+  // They can't be emptied (autocomplete never moves what the student placed),
+  // so they have to be filled up instead.
+  const fullTimeShortfall = plan.semesters
+    .filter((s) => !s.rowLabel && s.term !== TRANSFER_TERM)
+    .map((s) =>
+      s.courses
+        .filter((c) => c.source !== "transfer")
+        .reduce((sum, c) => sum + creditsOf(catalog, c.code), 0)
+    )
+    .filter((load) => load > 0 && load < PITT_FULLTIME_THRESHOLD)
+    .reduce((sum, load) => sum + (PITT_FULLTIME_THRESHOLD - load), 0);
+
+  const { picks, unfilled } = pickCourses(
+    major,
+    genEd,
+    catalog,
+    index,
+    existing,
+    fullTimeShortfall
+  );
 
   if (!picks.length) {
     return {
@@ -622,6 +776,7 @@ export function autocompletePlan(
       pittCredits: creditsBefore,
       residencyCapped: false,
       summerCapped: false,
+      partTimeTerms: [],
       creditsRequired: major.totalDegreeCredits,
       meetsCreditRequirement: creditsBefore >= major.totalDegreeCredits,
     };
@@ -644,14 +799,25 @@ export function autocompletePlan(
     .filter((s) => !s.rowLabel && s.term === TRANSFER_TERM)
     .reduce((sum, s) => sum + Math.max(0, MAX_COURSES_PER_TERM - s.courses.length), 0);
 
-  const { transferred, residencyCapped, summerCapped } = chooseTransfers(
+  const costOf = (transferred: Set<CourseCode>): number => {
+    const { semesters } = schedule(plan, picks, transferred, catalog, baseLoads);
+    return computeCost({ ...plan, semesters }, catalog, schoolCosts).totalCost;
+  };
+
+  const { transferred, total: estimatedTotal, allNative: allNativeTotal, residencyCapped, summerCapped } = chooseTransfers(
     picks,
-    baseLoads,
     existingNativeCredits,
-    summerCapacity
+    summerCapacity,
+    costOf
   );
 
-  const { semesters, placed } = schedule(plan, picks, transferred, catalog, baseLoads);
+  const { semesters, placed, partTimeTerms } = schedule(
+    plan,
+    picks,
+    transferred,
+    catalog,
+    baseLoads
+  );
 
   // Both headline figures come from the SAME cost function the sidebar uses,
   // run over two real plans. The sweep's internal estimate is only ever used
@@ -660,12 +826,6 @@ export function autocompletePlan(
   // cost of transfer courses already in the plan, which is constant across
   // the sweep and so harmless there, but would be wrong on screen.)
   const proposed: StudentPlan = { ...plan, semesters };
-  const baseline: StudentPlan = {
-    ...plan,
-    semesters: schedule(plan, picks, new Set<CourseCode>(), catalog, baseLoads).semesters,
-  };
-  const estimatedTotal = computeCost(proposed, catalog, schoolCosts).totalCost;
-  const allNativeTotal = computeCost(baseline, catalog, schoolCosts).totalCost;
 
   const transferCount = placed.filter((p) => p.transfer).length;
   const creditsAfterTotal =
@@ -688,6 +848,7 @@ export function autocompletePlan(
       picks.filter((p) => !transferred.has(p.code)).reduce((sum, p) => sum + p.credits, 0),
     residencyCapped,
     summerCapped,
+    partTimeTerms,
     creditsRequired: major.totalDegreeCredits,
     meetsCreditRequirement: creditsAfterTotal >= major.totalDegreeCredits,
   };
