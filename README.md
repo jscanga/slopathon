@@ -33,24 +33,9 @@ live requirements checklist that tracks what's satisfied.
 **Deployment**
 - Vercel
 
-## Running it
+## Wanna See?
 
-Two terminals:
-
-```bash
-# terminal 1
-cd server
-npm install
-npm run dev        # http://localhost:4000
-
-# terminal 2
-cd client
-npm install
-npm run dev         # http://localhost:5173
-```
-
-Open http://localhost:5173. The Vite dev server proxies `/api/*` to the
-backend on port 4000 (see `client/vite.config.ts`).
+[Try it Out!](https://transfr-one.vercel.app/)
 
 ## What's implemented
 
@@ -98,27 +83,6 @@ backend on port 4000 (see `client/vite.config.ts`).
   equivalencies), plus clear-plan and autocomplete shortcuts. Demo only — it
   overwrites the current plan.
 
-## Known gaps (by design, for this MVP pass)
-
-- **No prerequisite checking yet.** The major requirements data has no
-  prerequisite chains, so there's no red-highlighting for unmet
-  prerequisites. The `PlannedCourse` type and evaluation engine are
-  structured so this can be added later without a rework — see
-  `server/src/engine/evaluatePlan.ts`.
-- **Credit hours for most catalog courses are defaulted to 3**,
-  tagged `"creditsSource": "default-assumed"` in
-  `server/src/data/courses-catalog.json`. The 17 courses with real known
-  credits (the CS/Math core + capstone options, plus `CMPINF 0010` at 4 and
-  `CMPINF 0001` at 1) are tagged `"known"`. If you get real per-course
-  credit data, re-run a merge keeping the `"known"` ones untouched.
-  `CMPINF 0001` was added by hand — it appears in no source file, so its
-  credits are verified but its **name is a placeholder** waiting on a real
-  title, and nothing references the code, so it's reachable only by
-  searching the "Add course" modal.
-- **Co-op rotation counting** isn't modeled — the capstone requirement is
-  satisfied by presence of `CS 1906` in the plan, not by counting 2
-  rotations.
-- **No auth / multi-user support** — this is a single-plan MVP.
 
 ## Data files (also useful standalone)
 
