@@ -40,10 +40,53 @@ function TermBlock({
   onRemoveCourse: (code: string) => void;
   delay?: number;
 }) {
+  const isOther = !!sem.rowLabel;
   const season = sem.term as SeasonName;
   const totalCredits = sem.courses.reduce(
     (sum, c) => sum + (catalog[c.code]?.credits ?? 0),
     0
+  );
+
+  const header = isOther ? (
+    <div className="flex items-start justify-between gap-2 bg-muted/50 px-3.5 pb-3 pt-3">
+      <div>
+        <h3 className="text-[1.2rem] font-semibold leading-none text-foreground">
+          {sem.rowLabel}
+        </h3>
+        <span className="font-code text-[0.68rem] font-medium text-muted-foreground">
+          transfer / AP credit
+        </span>
+      </div>
+      <span className="rounded-full bg-background/80 px-2 py-0.5 font-code text-[0.68rem] font-medium text-muted-foreground shadow-sm">
+        {totalCredits} cr
+      </span>
+    </div>
+  ) : (
+    <SeasonScene season={season} className="px-3.5 pb-9 pt-3">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <h3
+            className={cn(
+              "text-[1.2rem] font-semibold leading-none [text-shadow:0_1px_3px_rgba(255,255,255,0.75)]",
+              inkClass[season]
+            )}
+          >
+            {sem.term}
+          </h3>
+          <span className={cn("font-code text-[0.68rem] font-medium opacity-80", inkClass[season])}>
+            {sem.year}
+          </span>
+        </div>
+        <span
+          className={cn(
+            "rounded-full bg-white/65 px-2 py-0.5 font-code text-[0.68rem] font-medium shadow-sm backdrop-blur-sm",
+            inkClass[season]
+          )}
+        >
+          {totalCredits} cr
+        </span>
+      </div>
+    </SeasonScene>
   );
 
   return (
@@ -51,33 +94,14 @@ function TermBlock({
       className="group flex min-h-[210px] animate-rise flex-col overflow-hidden transition-all duration-200 hover:-translate-y-1 hover:shadow-lift"
       style={{ animationDelay: `${delay}ms` }}
     >
-      <SeasonScene season={season} className="px-3.5 pb-9 pt-3">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <h3
-              className={cn(
-                "text-[1.2rem] font-semibold leading-none [text-shadow:0_1px_3px_rgba(255,255,255,0.75)]",
-                inkClass[season]
-              )}
-            >
-              {sem.term}
-            </h3>
-            <span className={cn("font-code text-[0.68rem] font-medium opacity-80", inkClass[season])}>
-              {sem.year}
-            </span>
-          </div>
-          <span
-            className={cn(
-              "rounded-full bg-white/65 px-2 py-0.5 font-code text-[0.68rem] font-medium shadow-sm backdrop-blur-sm",
-              inkClass[season]
-            )}
-          >
-            {totalCredits} cr
-          </span>
-        </div>
-      </SeasonScene>
+      {header}
 
-      <div className={cn("flex flex-1 flex-col gap-1.5 p-2.5", bodyClass[season])}>
+      <div
+        className={cn(
+          "flex flex-1 flex-col gap-1.5 p-2.5",
+          isOther ? "bg-card" : bodyClass[season]
+        )}
+      >
         {sem.courses.length === 0 && (
           <p className="my-1 select-none text-center text-[0.78rem] italic text-muted-foreground/70">
             No courses yet
@@ -110,9 +134,13 @@ export default function SemesterBoard({
   onAddCourse,
   onRemoveCourse,
 }: Props) {
+  // Split real term semesters from special labeled rows ("Other").
+  const termSemesters = semesters.filter((s) => !s.rowLabel);
+  const otherSemesters = semesters.filter((s) => s.rowLabel);
+
   const years: Semester[][] = [];
-  for (let i = 0; i < semesters.length; i += 3) {
-    years.push(semesters.slice(i, i + 3));
+  for (let i = 0; i < termSemesters.length; i += 3) {
+    years.push(termSemesters.slice(i, i + 3));
   }
 
   return (
@@ -142,6 +170,24 @@ export default function SemesterBoard({
           </section>
         ))}
       </div>
+
+      {otherSemesters.map((sem) => (
+        <section key={sem.id} className="mt-7">
+          <div className="mb-3 flex items-center gap-3">
+            <span className="font-code text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              {sem.rowLabel}
+            </span>
+            <span className="h-px flex-1 bg-border" />
+          </div>
+          <TermBlock
+            sem={sem}
+            catalog={catalog}
+            courseTags={courseTags}
+            onAddCourse={() => onAddCourse(sem.id)}
+            onRemoveCourse={(code) => onRemoveCourse(sem.id, code)}
+          />
+        </section>
+      ))}
     </div>
   );
 }

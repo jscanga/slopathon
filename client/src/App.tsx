@@ -20,6 +20,7 @@ import {
   buildMajorTagIndex,
   mergeTagIndexes,
 } from "./lib/genEdIndex";
+import { autocompleteDegree } from "./lib/autocomplete";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GraduationCap, Upload } from "lucide-react";
 
@@ -187,6 +188,16 @@ export default function App() {
     });
   }
 
+  /** Demo: fill in the courses needed to satisfy all remaining requirements. */
+  function autocomplete() {
+    setPlan((prev) => {
+      if (!prev || !catalog) return prev;
+      const next = autocompleteDegree(prev, catalog);
+      return next;
+    });
+    setTab("planner");
+  }
+
   if (error) {
     return (
       <div className="mx-auto max-w-lg p-10">
@@ -289,7 +300,11 @@ export default function App() {
         />
       )}
 
-      <DebugPanel onLoadPlan={loadSamplePlan} onClearPlan={clearPlan} />
+      <DebugPanel
+        onLoadPlan={loadSamplePlan}
+        onClearPlan={clearPlan}
+        onAutocomplete={autocomplete}
+      />
 
       {importOpen && (
         <ImportModal

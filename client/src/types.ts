@@ -137,6 +137,11 @@ export interface Semester {
   term: Term;
   year: number;
   courses: PlannedCourse[];
+  /** When set, this semester is rendered as a standalone labeled row (e.g.
+   *  "Other") instead of being grouped into a Year N / Fall-Spring-Summer
+   *  block. Used for buckets like AP/transfer credit that aren't tied to a
+   *  real term. */
+  rowLabel?: string;
 }
 
 export interface StudentPlan {

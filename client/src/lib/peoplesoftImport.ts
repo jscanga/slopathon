@@ -1,4 +1,4 @@
-import type { PlannedCourse, StudentPlan, Semester, Term } from "../types";
+import type { StudentPlan, Semester, Term } from "../types";
 
 /**
  * Parses a University of Pittsburgh PeopleSoft "Academic Advisement What-If"
@@ -24,6 +24,32 @@ import type { PlannedCourse, StudentPlan, Semester, Term } from "../types";
  */
 
 const TERM_RE = /(\d{4})(Fall|Spring|Summer)/;
+
+// ---------------------------------------------------------------------------
+// DEMO HARDCODE (remove/generalize for production).
+// For demonstrations, transferred/AP credit is presented specially:
+//  - Most transfer courses go into a standalone "Other" row (AP/transfer
+//    credit that isn't tied to a real term).
+//  - A specific set of transfers is instead placed in the first available
+//    Summer and attributed to specific real schools, so the cost engine
+//    resolves real per-credit prices and the demo shows transfer savings.
+// School names are the exact keys in school-cost-data.json.
+// ---------------------------------------------------------------------------
+const DEMO_SUMMER_SCHOOL_BY_CODE: Record<string, string> = {
+  "BIOSC 0150": "SOUTHERN NEW HAMPSHIRE UNIVERSITY",
+  "BIOSC 0160": "JACKSONVILLE STATE UNIVERSITY",
+  "CS 1675": "ARIZONA STATE UNIVERSITY-TEMPE",
+  "CS 1502": "ARIZONA STATE UNIVERSITY-TEMPE",
+};
+// Both ENGCMP transfer courses (report has 0200 + 0450) → CCAC. Matched by
+// department so a specific catalog-number typo doesn't matter.
+const DEMO_ENGCMP_SUMMER_SCHOOL = "COMMUNITY COLLEGE OF ALLEGHENY COUNTY-PITTSBURGH";
+
+function demoSummerSchoolFor(code: string): string | null {
+  if (DEMO_SUMMER_SCHOOL_BY_CODE[code]) return DEMO_SUMMER_SCHOOL_BY_CODE[code];
+  if (code.startsWith("ENGCMP ")) return DEMO_ENGCMP_SUMMER_SCHOOL;
+  return null;
+}
 
 export interface ParsedCourseRow {
   term: string; // raw, e.g. "2025Fall"
@@ -189,6 +215,7 @@ export function buildPlanFromRows(
   const semesters: Semester[] = [];
   const slotIndex = new Map<string, number>(); // "season|calYear" -> index
   let idx = 0;
+  let firstSummerIndex: number | null = null;
   for (let ay = minYear; ay <= maxYear; ay++) {
     const blocks: Array<{ term: Term; year: number }> = [
       { term: "Fall", year: ay },
@@ -199,26 +226,42 @@ export function buildPlanFromRows(
       const id = `sem-${idx}`;
       semesters.push({ id, term: b.term, year: b.year, courses: [] });
       slotIndex.set(`${b.term}|${b.year}`, idx);
+      if (b.term === "Summer" && firstSummerIndex === null) firstSummerIndex = idx;
       idx++;
     }
   }
 
-  // Place each course into its matching block.
+  // A standalone "Other" row for transfer/AP credit not routed to Summer.
+  const otherSemester: Semester = {
+    id: "other",
+    term: "Summer", // arbitrary; rowLabel makes it render as its own row
+    year: minYear,
+    courses: [],
+    rowLabel: "Other",
+  };
+
+  // Place each course.
   for (const r of deduped) {
     const season = seasonOf(r.term);
     const calYear = yearOf(r.term);
-    if (season == null || calYear == null) {
-      warnings.push(`Skipped ${r.code}: unrecognized term "${r.term}".`);
-      continue;
-    }
-    const key = `${season}|${calYear}`;
-    const si = slotIndex.get(key);
-    if (si == null) {
-      warnings.push(`Skipped ${r.code}: no timeline slot for ${r.term}.`);
-      continue;
-    }
-    const planned: PlannedCourse = r.isTransfer
-      ? {
+
+    if (r.isTransfer) {
+      // DEMO routing: specific transfers → first Summer w/ named school;
+      // all other transfers → the "Other" row.
+      const summerSchool = demoSummerSchoolFor(r.code);
+      if (summerSchool && firstSummerIndex !== null) {
+        semesters[firstSummerIndex].courses.push({
+          code: r.code,
+          source: "transfer",
+          transferFrom: {
+            school: summerSchool,
+            code: r.code,
+            title: r.title,
+            credits: r.units,
+          },
+        });
+      } else {
+        otherSemester.courses.push({
           code: r.code,
           source: "transfer",
           transferFrom: {
@@ -227,10 +270,26 @@ export function buildPlanFromRows(
             title: r.title,
             credits: r.units,
           },
-        }
-      : { code: r.code, source: "native" };
-    semesters[si].courses.push(planned);
+        });
+      }
+      continue;
+    }
+
+    // Native courses stay in their real term block.
+    if (season == null || calYear == null) {
+      warnings.push(`Skipped ${r.code}: unrecognized term "${r.term}".`);
+      continue;
+    }
+    const si = slotIndex.get(`${season}|${calYear}`);
+    if (si == null) {
+      warnings.push(`Skipped ${r.code}: no timeline slot for ${r.term}.`);
+      continue;
+    }
+    semesters[si].courses.push({ code: r.code, source: "native" });
   }
+
+  // Append the Other row only if it has courses.
+  if (otherSemester.courses.length > 0) semesters.push(otherSemester);
 
   const genericCount = deduped.filter((r) => r.catalogNbr === "0000").length;
   if (genericCount > 0) {

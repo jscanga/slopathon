@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Bug, X } from "lucide-react";
+import { Bug, X, Wand2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   SAMPLE_SCENARIOS,
@@ -11,6 +11,7 @@ import type { StudentPlan } from "../types";
 interface Props {
   onLoadPlan: (plan: StudentPlan) => void;
   onClearPlan: () => void;
+  onAutocomplete: () => void;
 }
 
 /**
@@ -19,7 +20,7 @@ interface Props {
  * Ctrl+D (Cmd+D on Mac). For demonstrations only — loads canned sample
  * plans over the current plan.
  */
-export default function DebugPanel({ onLoadPlan, onClearPlan }: Props) {
+export default function DebugPanel({ onLoadPlan, onClearPlan, onAutocomplete }: Props) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState<SampleScenarioId | null>(null);
 
@@ -74,6 +75,13 @@ export default function DebugPanel({ onLoadPlan, onClearPlan }: Props) {
                 </div>
               </button>
             ))}
+
+            <button
+              onClick={onAutocomplete}
+              className="mt-0.5 inline-flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-left text-[0.8rem] font-medium text-primary hover:bg-primary/15"
+            >
+              <Wand2 className="h-3.5 w-3.5" /> Autocomplete degree
+            </button>
 
             <button
               onClick={() => {
