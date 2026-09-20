@@ -2,7 +2,7 @@
 
 # transfr ![Slopathon](client/public/favicon.svg) 
 
-Optimize your degree, reroute your future
+Optimize Your Degree, Save Your Future
 
 Most students plan their degree in a spreadsheet and find out what it costs when the bill arrives. transfr puts both in one screen: a four-year timeline that checks your major and gen-ed requirements as you build it, and a searchable database of every course Pitt accepts in transfer — 43,239 equivalencies from 1,801 schools — with each school's cost per credit attached. Plan the degree, see the price, reroute the expensive parts.
 
