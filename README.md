@@ -1,4 +1,4 @@
-## Steel Hacks 2026: ## James Scanga, Aayush Shah, James Widmer
+## Steel Hacks 2026: James Scanga, Aayush Shah, James Widmer
 
 # transfr ![Slopathon](client/public/favicon.svg) 
 
